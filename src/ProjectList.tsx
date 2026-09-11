@@ -5,11 +5,11 @@ import type { Manager, Project } from "./types";
 export default function ProjectList({
   manager,
   onOpenProject,
-  onLogout,
+  onSwitchFolder,
 }: {
   manager: Manager;
   onOpenProject: (project: Project) => void;
-  onLogout: () => void;
+  onSwitchFolder: () => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [newName, setNewName] = useState("");
@@ -17,8 +17,8 @@ export default function ProjectList({
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    listProjects(manager.id).then(setProjects).catch(() => setError("Не удалось загрузить список проектов."));
-  }, [manager.id]);
+    listProjects().then(setProjects).catch(() => setError("Не удалось загрузить список проектов."));
+  }, []);
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -39,25 +39,29 @@ export default function ProjectList({
   return (
     <div className="page">
       <div className="top-bar">
-        <h1>Проекты — {manager.name}</h1>
-        <button className="link-button" onClick={onLogout}>Выйти</button>
+        <h1>Проекты — {manager.name}{manager.is_admin ? " (админ)" : ""}</h1>
+        <button className="link-button" onClick={onSwitchFolder}>Сменить папку</button>
       </div>
 
       {error && <div className="error-box">{error}</div>}
 
-      <form className="inline-form" onSubmit={submitCreate}>
-        <input
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          placeholder="Название нового проекта"
-        />
-        <button type="submit" disabled={creating || !newName.trim()}>
-          {creating ? "Создаю…" : "Создать проект"}
-        </button>
-      </form>
+      {manager.is_admin ? (
+        <form className="inline-form" onSubmit={submitCreate}>
+          <input
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            placeholder="Название нового проекта"
+          />
+          <button type="submit" disabled={creating || !newName.trim()}>
+            {creating ? "Создаю…" : "Создать проект"}
+          </button>
+        </form>
+      ) : (
+        <p className="muted small">Создавать новые проекты может только админская папка — здесь можно открывать и проверять уже существующие.</p>
+      )}
 
       {projects === null && <div className="muted">Загрузка…</div>}
-      {projects !== null && projects.length === 0 && <div className="muted">Проектов пока нет — создайте первый выше.</div>}
+      {projects !== null && projects.length === 0 && <div className="muted">Проектов пока нет.</div>}
 
       <div className="folder-grid">
         {projects?.map(p => (

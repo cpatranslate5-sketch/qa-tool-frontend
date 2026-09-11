@@ -25,8 +25,8 @@ export default function ProjectView({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    listLanguages(manager.id, project.id).then(setLanguages).catch(() => setError("Не удалось загрузить языковые папки."));
-  }, [manager.id, project.id]);
+    listLanguages(project.id).then(setLanguages).catch(() => setError("Не удалось загрузить языковые папки."));
+  }, [project.id]);
 
   useEffect(() => {
     setGlossary(project.glossary);
@@ -73,28 +73,36 @@ export default function ProjectView({
 
       <section className="glossary-section">
         <label>Глоссарий проекта (общий для всех языков)</label>
-        <textarea
-          value={glossary}
-          onChange={e => { setGlossary(e.target.value); setGlossarySaved(false); }}
-          rows={4}
-          placeholder="Например: term1 → перевод1, term2 → перевод2"
-        />
-        <button onClick={saveGlossary} disabled={savingGlossary || glossary === project.glossary}>
-          {savingGlossary ? "Сохраняю…" : "Сохранить глоссарий"}
-        </button>
-        {glossarySaved && <span className="muted small"> Сохранено.</span>}
+        {manager.is_admin ? (
+          <>
+            <textarea
+              value={glossary}
+              onChange={e => { setGlossary(e.target.value); setGlossarySaved(false); }}
+              rows={4}
+              placeholder="Например: term1 → перевод1, term2 → перевод2"
+            />
+            <button onClick={saveGlossary} disabled={savingGlossary || glossary === project.glossary}>
+              {savingGlossary ? "Сохраняю…" : "Сохранить глоссарий"}
+            </button>
+            {glossarySaved && <span className="muted small"> Сохранено.</span>}
+          </>
+        ) : (
+          <div className="glossary-readonly">{project.glossary || <span className="muted">не задан</span>}</div>
+        )}
       </section>
 
       <section>
         <h2>Языковые папки</h2>
-        <form className="inline-form" onSubmit={submitAddLanguage}>
-          <input
-            value={newLangCode}
-            onChange={e => setNewLangCode(e.target.value)}
-            placeholder="Код языка, напр. ru, ar, es-es"
-          />
-          <button type="submit" disabled={!newLangCode.trim()}>Добавить папку</button>
-        </form>
+        {manager.is_admin && (
+          <form className="inline-form" onSubmit={submitAddLanguage}>
+            <input
+              value={newLangCode}
+              onChange={e => setNewLangCode(e.target.value)}
+              placeholder="Код языка, напр. ru, ar, es-es"
+            />
+            <button type="submit" disabled={!newLangCode.trim()}>Добавить папку</button>
+          </form>
+        )}
 
         {languages === null && <div className="muted">Загрузка…</div>}
         {languages !== null && languages.length === 0 && <div className="muted">Языковых папок пока нет.</div>}

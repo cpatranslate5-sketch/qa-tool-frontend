@@ -28,37 +28,45 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-export async function login(name: string, code: string): Promise<{ manager: Manager; isNew: boolean }> {
-  const res = await request<{ manager_id: number; name: string; is_new: boolean }>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ name, code }),
-  });
-  return { manager: { id: res.manager_id, name: res.name }, isNew: res.is_new };
+// --- folders (managers) ---
+
+export function listManagers(): Promise<Manager[]> {
+  return request("/managers");
 }
 
-export function listProjects(managerId: number): Promise<Project[]> {
-  return request(`/managers/${managerId}/projects`);
+export function createManagerFolder(name: string, code: string): Promise<Manager> {
+  return request("/managers", { method: "POST", body: JSON.stringify({ name, code }) });
+}
+
+export function unlockManagerFolder(managerId: number, code: string): Promise<Manager> {
+  return request(`/managers/${managerId}/unlock`, { method: "POST", body: JSON.stringify({ code }) });
+}
+
+// --- projects (shared; structural changes require an admin manager_id) ---
+
+export function listProjects(): Promise<Project[]> {
+  return request("/projects");
 }
 
 export function createProject(managerId: number, name: string): Promise<Project> {
-  return request(`/managers/${managerId}/projects`, { method: "POST", body: JSON.stringify({ name }) });
+  return request("/projects", { method: "POST", body: JSON.stringify({ name, manager_id: managerId }) });
 }
 
 export function updateGlossary(managerId: number, projectId: number, glossary: string): Promise<Project> {
-  return request(`/managers/${managerId}/projects/${projectId}/glossary`, {
+  return request(`/projects/${projectId}/glossary`, {
     method: "PUT",
-    body: JSON.stringify({ glossary }),
+    body: JSON.stringify({ glossary, manager_id: managerId }),
   });
 }
 
-export function listLanguages(managerId: number, projectId: number): Promise<Language[]> {
-  return request(`/managers/${managerId}/projects/${projectId}/languages`);
+export function listLanguages(projectId: number): Promise<Language[]> {
+  return request(`/projects/${projectId}/languages`);
 }
 
 export function addLanguage(managerId: number, projectId: number, langCode: string): Promise<Language> {
-  return request(`/managers/${managerId}/projects/${projectId}/languages`, {
+  return request(`/projects/${projectId}/languages`, {
     method: "POST",
-    body: JSON.stringify({ lang_code: langCode }),
+    body: JSON.stringify({ lang_code: langCode, manager_id: managerId }),
   });
 }
 
@@ -69,6 +77,7 @@ export function runCheck(params: {
   projectId?: number;
   languageId?: number;
   glossary?: string;
+  managerName?: string;
 }): Promise<{ findings: Finding[]; single_check_id: number | null }> {
   return request("/check", {
     method: "POST",
@@ -79,28 +88,26 @@ export function runCheck(params: {
       project_id: params.projectId,
       language_id: params.languageId,
       glossary: params.glossary || "",
+      manager_name: params.managerName || "",
     }),
   });
 }
 
-export function singleCheckHistory(
-  managerId: number,
-  projectId: number,
-  languageId: number
-): Promise<SingleCheckHistoryEntry[]> {
-  return request(`/managers/${managerId}/projects/${projectId}/languages/${languageId}/history`);
+export function singleCheckHistory(projectId: number, languageId: number): Promise<SingleCheckHistoryEntry[]> {
+  return request(`/projects/${projectId}/languages/${languageId}/history`);
 }
 
 export async function multiCheck(
-  managerId: number,
   projectId: number,
   file: File,
-  sourceLang: string
+  sourceLang: string,
+  managerName: string
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("source_lang", sourceLang);
-  const res = await fetch(`${API_URL}/managers/${managerId}/projects/${projectId}/multi-check`, {
+  formData.append("manager_name", managerName);
+  const res = await fetch(`${API_URL}/projects/${projectId}/multi-check`, {
     method: "POST",
     body: formData,
   });
@@ -117,14 +124,14 @@ export async function multiCheck(
   return res.json();
 }
 
-export function multiCheckHistory(managerId: number, projectId: number): Promise<MultiCheckHistoryEntry[]> {
-  return request(`/managers/${managerId}/projects/${projectId}/multi-check`);
+export function multiCheckHistory(projectId: number): Promise<MultiCheckHistoryEntry[]> {
+  return request(`/projects/${projectId}/multi-check`);
 }
 
-export function multiCheckDetail(managerId: number, projectId: number, multiCheckId: number): Promise<MultiCheckResponse> {
-  return request(`/managers/${managerId}/projects/${projectId}/multi-check/${multiCheckId}`);
+export function multiCheckDetail(projectId: number, multiCheckId: number): Promise<MultiCheckResponse> {
+  return request(`/projects/${projectId}/multi-check/${multiCheckId}`);
 }
 
-export function multiCheckReportUrl(managerId: number, projectId: number, multiCheckId: number): string {
-  return `${API_URL}/managers/${managerId}/projects/${projectId}/multi-check/${multiCheckId}/report.xlsx`;
+export function multiCheckReportUrl(projectId: number, multiCheckId: number): string {
+  return `${API_URL}/projects/${projectId}/multi-check/${multiCheckId}/report.xlsx`;
 }

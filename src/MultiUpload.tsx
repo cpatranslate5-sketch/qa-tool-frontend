@@ -22,8 +22,8 @@ export default function MultiUpload({
   const [openLang, setOpenLang] = useState<string | null>(null);
 
   useEffect(() => {
-    multiCheckHistory(manager.id, project.id).then(setHistory).catch(() => {});
-  }, [manager.id, project.id]);
+    multiCheckHistory(project.id).then(setHistory).catch(() => {});
+  }, [project.id]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,10 +33,10 @@ export default function MultiUpload({
     setError("");
     setResult(null);
     try {
-      const res = await multiCheck(manager.id, project.id, file, sourceLang.trim());
+      const res = await multiCheck(project.id, file, sourceLang.trim(), manager.name);
       setResult(res);
       setOpenLang(res.summary.languages_checked[0] || null);
-      multiCheckHistory(manager.id, project.id).then(setHistory).catch(() => {});
+      multiCheckHistory(project.id).then(setHistory).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? `Не удалось обработать файл: ${err.message}` : "Не удалось обработать файл.");
     } finally {
@@ -47,7 +47,7 @@ export default function MultiUpload({
   async function openHistoryEntry(id: number) {
     setError("");
     try {
-      const res = await multiCheckDetail(manager.id, project.id, id);
+      const res = await multiCheckDetail(project.id, id);
       setResult(res);
       setOpenLang(res.summary.languages_checked[0] || null);
     } catch {
@@ -89,7 +89,7 @@ export default function MultiUpload({
               Не распознаны как языки (пропущены): {unrecognized.join(", ")}
             </div>
           )}
-          <a className="download-link" href={multiCheckReportUrl(manager.id, project.id, result.multi_check_id)}>
+          <a className="download-link" href={multiCheckReportUrl(project.id, result.multi_check_id)}>
             ⬇ Скачать отчёт (Excel)
           </a>
 
@@ -144,7 +144,9 @@ export default function MultiUpload({
           <h2>История загрузок</h2>
           {history.map(h => (
             <button key={h.id} className="history-row" onClick={() => openHistoryEntry(h.id)}>
-              {new Date(h.created_at).toLocaleString("ru-RU")} — {h.filename} — {h.summary.total_findings} проблем
+              {new Date(h.created_at).toLocaleString("ru-RU")}
+              {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
+              {" — "}{h.filename} — {h.summary.total_findings} проблем
             </button>
           ))}
         </div>

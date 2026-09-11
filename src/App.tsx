@@ -1,12 +1,10 @@
-import { useEffect, useState } from "react";
-import Login from "./Login";
+import { useState } from "react";
+import FolderPicker from "./FolderPicker";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
 import LanguageCheck from "./LanguageCheck";
 import MultiUpload from "./MultiUpload";
 import type { Language, Manager, Project } from "./types";
-
-const STORAGE_KEY = "qa-tool-manager";
 
 type View =
   | { name: "projects" }
@@ -18,31 +16,18 @@ export default function App() {
   const [manager, setManager] = useState<Manager | null>(null);
   const [view, setView] = useState<View>({ name: "projects" });
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setManager(JSON.parse(saved));
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-  }, []);
-
-  function handleLogin(m: Manager) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
+  function handleEnter(m: Manager) {
     setManager(m);
     setView({ name: "projects" });
   }
 
-  function handleLogout() {
-    localStorage.removeItem(STORAGE_KEY);
+  function handleSwitchFolder() {
     setManager(null);
     setView({ name: "projects" });
   }
 
   if (!manager) {
-    return <Login onLogin={handleLogin} />;
+    return <FolderPicker onEnter={handleEnter} />;
   }
 
   if (view.name === "projects") {
@@ -50,7 +35,7 @@ export default function App() {
       <ProjectList
         manager={manager}
         onOpenProject={project => setView({ name: "project", project })}
-        onLogout={handleLogout}
+        onSwitchFolder={handleSwitchFolder}
       />
     );
   }

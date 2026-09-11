@@ -32,8 +32,8 @@ export default function LanguageCheck({
   const [history, setHistory] = useState<SingleCheckHistoryEntry[]>([]);
 
   useEffect(() => {
-    singleCheckHistory(manager.id, project.id, language.id).then(setHistory).catch(() => {});
-  }, [manager.id, project.id, language.id]);
+    singleCheckHistory(project.id, language.id).then(setHistory).catch(() => {});
+  }, [project.id, language.id]);
 
   function toggleCheck(key: string) {
     setChecks(prev => prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]);
@@ -49,9 +49,10 @@ export default function LanguageCheck({
         source, translation, checks,
         projectId: project.id,
         languageId: language.id,
+        managerName: manager.name,
       });
       setFindings(res.findings);
-      singleCheckHistory(manager.id, project.id, language.id).then(setHistory).catch(() => {});
+      singleCheckHistory(project.id, language.id).then(setHistory).catch(() => {});
     } catch {
       setError("Не удалось связаться с сервером проверки.");
     } finally {
@@ -114,7 +115,9 @@ export default function LanguageCheck({
           {history.map(h => (
             <details key={h.id} className="history-entry">
               <summary>
-                {new Date(h.created_at).toLocaleString("ru-RU")} — {h.findings.length === 0 ? "без проблем" : `${h.findings.length} найдено`}
+                {new Date(h.created_at).toLocaleString("ru-RU")}
+                {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
+                {" — "}{h.findings.length === 0 ? "без проблем" : `${h.findings.length} найдено`}
               </summary>
               <div className="history-pair">
                 <div><strong>Источник:</strong> {h.source}</div>

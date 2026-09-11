@@ -1,12 +1,14 @@
 export interface Manager {
   id: number;
   name: string;
+  is_admin: boolean;
 }
 
 export interface Project {
   id: number;
   name: string;
   glossary: string;
+  created_by_name: string;
 }
 
 export interface Language {
@@ -26,6 +28,7 @@ export interface SingleCheckHistoryEntry {
   translation: string;
   checks_run: string[];
   findings: Finding[];
+  performed_by_name: string;
   created_at: string;
 }
 
@@ -64,5 +67,6 @@ export interface MultiCheckHistoryEntry {
   filename: string;
   source_lang: string;
   summary: MultiCheckSummary;
+  performed_by_name: string;
   created_at: string;
 }

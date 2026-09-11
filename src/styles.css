@@ -104,6 +104,19 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .glossary-section { margin-bottom: 8px; }
 .glossary-section button { margin-top: 10px; }
+.glossary-readonly {
+  background: #1D212C;
+  border: 1px solid #2A2F3E;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.88rem;
+  color: #C7CBD6;
+  white-space: pre-wrap;
+}
+
+.lock-hint { margin-left: 4px; }
+.create-folder-card { border-style: dashed; color: #8B90A0; }
+.create-folder-card:hover { color: #F1EFEA; }
 
 /* --- multi upload --- */
 .multi-upload-form { max-width: 480px; }
