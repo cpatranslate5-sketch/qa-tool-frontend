@@ -1,0 +1,56 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #14171F;
+  color: #F1EFEA;
+}
+.page { max-width: 900px; margin: 0 auto; padding: 24px 20px 60px; }
+h1 { font-size: 1.4rem; margin-bottom: 20px; }
+h2 { font-size: 1.1rem; margin: 20px 0 10px; }
+label { display: block; font-size: 0.8rem; color: #8B90A0; margin: 14px 0 4px; }
+textarea, input {
+  width: 100%;
+  background: #1D212C;
+  border: 1px solid #2A2F3E;
+  border-radius: 8px;
+  color: #F1EFEA;
+  padding: 10px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  resize: vertical;
+}
+.two-col { display: flex; gap: 16px; }
+.col { flex: 1; min-width: 0; }
+.checks-row { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 14px 0; }
+.check-chip { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #F1EFEA; }
+.check-chip input { width: auto; }
+button {
+  background: #6C7BC4;
+  border: none;
+  border-radius: 9px;
+  padding: 10px 20px;
+  color: #14171F;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+.error-box { color: #C1503A; margin-top: 12px; font-size: 0.85rem; }
+.muted { color: #8B90A0; font-size: 0.85rem; }
+.results { margin-top: 10px; }
+.finding {
+  background: #1D212C;
+  border: 1px solid #2A2F3E;
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.finding-high { border-left-color: #C1503A; }
+.finding-medium { border-left-color: #E8A23D; }
+.finding-low { border-left-color: #8B90A0; }
+.finding-severity { font-weight: 700; margin-right: 8px; }
+.finding-type { color: #8B90A0; font-size: 0.75rem; text-transform: uppercase; }
+.finding-message { margin-top: 4px; }
