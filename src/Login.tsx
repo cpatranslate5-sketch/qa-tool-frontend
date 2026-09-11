@@ -17,10 +17,10 @@ export default function Login({ onLogin }: { onLogin: (manager: Manager) => void
     setInfo("");
     try {
       const res = await login(name.trim(), code.trim());
-      if (res.is_new) {
+      if (res.isNew) {
         setInfo("Это имя используется впервые — запомнили новый код для него.");
       }
-      onLogin({ id: res.id, name: res.name });
+      onLogin(res.manager);
     } catch (err) {
       setError(err instanceof Error && err.message === "401" ? "Неверный код для этого имени." : "Не удалось войти. Попробуйте ещё раз.");
     } finally {

@@ -28,8 +28,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-export function login(name: string, code: string): Promise<Manager & { is_new: boolean }> {
-  return request("/auth/login", { method: "POST", body: JSON.stringify({ name, code }) });
+export async function login(name: string, code: string): Promise<{ manager: Manager; isNew: boolean }> {
+  const res = await request<{ manager_id: number; name: string; is_new: boolean }>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ name, code }),
+  });
+  return { manager: { id: res.manager_id, name: res.name }, isNew: res.is_new };
 }
 
 export function listProjects(managerId: number): Promise<Project[]> {
