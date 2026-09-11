@@ -7,8 +7,15 @@ export interface Manager {
 export interface Project {
   id: number;
   name: string;
-  glossary: string;
+  glossary_filename: string;
+  glossary_uploaded_at: string | null;
   created_by_name: string;
+}
+
+export interface GlossaryStatus {
+  filename: string;
+  uploaded_at: string | null;
+  term_count: number;
 }
 
 export interface Language {

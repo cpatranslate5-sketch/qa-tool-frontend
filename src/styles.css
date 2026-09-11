@@ -114,6 +114,9 @@ button:disabled { opacity: 0.5; cursor: default; }
   white-space: pre-wrap;
 }
 
+.extra-instructions { margin: 4px 0 14px; }
+.extra-instructions textarea { font-size: 0.85rem; }
+
 .lock-hint { margin-left: 4px; }
 .create-folder-card { border-style: dashed; color: #8B90A0; }
 .create-folder-card:hover { color: #F1EFEA; }

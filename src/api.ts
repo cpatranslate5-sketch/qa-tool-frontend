@@ -1,5 +1,6 @@
 import type {
   Finding,
+  GlossaryStatus,
   Language,
   Manager,
   MultiCheckHistoryEntry,
@@ -52,11 +53,28 @@ export function createProject(managerId: number, name: string): Promise<Project>
   return request("/projects", { method: "POST", body: JSON.stringify({ name, manager_id: managerId }) });
 }
 
-export function updateGlossary(managerId: number, projectId: number, glossary: string): Promise<Project> {
-  return request(`/projects/${projectId}/glossary`, {
-    method: "PUT",
-    body: JSON.stringify({ glossary, manager_id: managerId }),
-  });
+export function getGlossaryStatus(projectId: number): Promise<GlossaryStatus> {
+  return request(`/projects/${projectId}/glossary/status`);
+}
+
+// Admin-only — replaces the whole project glossary with the uploaded file
+// (EN column, optional description column, then one column per language).
+export async function uploadGlossary(managerId: number, projectId: number, file: File): Promise<GlossaryStatus> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("manager_id", String(managerId));
+  const res = await fetch(`${API_URL}/projects/${projectId}/glossary/upload`, { method: "POST", body: formData });
+  if (!res.ok) {
+    let detail = String(res.status);
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
 }
 
 export function listLanguages(projectId: number): Promise<Language[]> {
@@ -77,6 +95,7 @@ export function runCheck(params: {
   projectId?: number;
   languageId?: number;
   glossary?: string;
+  extraInstructions?: string;
   managerName?: string;
 }): Promise<{ findings: Finding[]; single_check_id: number | null }> {
   return request("/check", {
@@ -88,6 +107,7 @@ export function runCheck(params: {
       project_id: params.projectId,
       language_id: params.languageId,
       glossary: params.glossary || "",
+      extra_instructions: params.extraInstructions || "",
       manager_name: params.managerName || "",
     }),
   });
@@ -101,12 +121,16 @@ export async function multiCheck(
   projectId: number,
   file: File,
   sourceLang: string,
-  managerName: string
+  managerName: string,
+  checks: string[],
+  extraInstructions: string
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("source_lang", sourceLang);
   formData.append("manager_name", managerName);
+  formData.append("checks", checks.join(","));
+  formData.append("extra_instructions", extraInstructions);
   const res = await fetch(`${API_URL}/projects/${projectId}/multi-check`, {
     method: "POST",
     body: formData,

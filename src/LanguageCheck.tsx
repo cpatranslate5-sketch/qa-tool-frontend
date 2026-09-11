@@ -5,9 +5,12 @@ import type { Finding, Language, Manager, Project, SingleCheckHistoryEntry } fro
 const CHECK_OPTIONS: { key: string; label: string }[] = [
   { key: "numbers", label: "Числа/даты" },
   { key: "placeholders", label: "Плейсхолдеры/теги" },
-  { key: "glossary", label: "Глоссарий" },
+  { key: "glossary", label: "Глоссарий (термины и формат чисел)" },
   { key: "register", label: "Регистр (ты/вы)" },
-  { key: "typo", label: "Опечатки/искажения" },
+  { key: "typo", label: "Опечатки/искажения смысла" },
+  { key: "untranslatable", label: "Непереводимые термины" },
+  { key: "completeness", label: "Неполнота перевода" },
+  { key: "punctuation", label: "Пунктуация/пробелы" },
 ];
 
 const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medium: "Средне", low: "Мелочь" };
@@ -26,6 +29,7 @@ export default function LanguageCheck({
   const [source, setSource] = useState("");
   const [translation, setTranslation] = useState("");
   const [checks, setChecks] = useState<string[]>(CHECK_OPTIONS.map(c => c.key));
+  const [extraInstructions, setExtraInstructions] = useState("");
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,6 +53,7 @@ export default function LanguageCheck({
         source, translation, checks,
         projectId: project.id,
         languageId: language.id,
+        extraInstructions,
         managerName: manager.name,
       });
       setFindings(res.findings);
@@ -87,6 +92,16 @@ export default function LanguageCheck({
             {c.label}
           </label>
         ))}
+      </div>
+
+      <div className="extra-instructions">
+        <label>Особые указания к этой задаче (необязательно, не сохраняется в проект)</label>
+        <textarea
+          value={extraInstructions}
+          onChange={e => setExtraInstructions(e.target.value)}
+          rows={2}
+          placeholder="Например: в этой задаче «Golden Spin» нужно переводить, а не оставлять как есть"
+        />
       </div>
 
       <button onClick={run} disabled={loading || !source.trim() || !translation.trim()}>

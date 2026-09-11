@@ -4,6 +4,18 @@ import type { Manager, MultiCheckHistoryEntry, MultiCheckResponse, Project } fro
 
 const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medium: "Средне", low: "Мелочь" };
 
+const CHECK_OPTIONS: { key: string; label: string }[] = [
+  { key: "numbers", label: "Числа/даты" },
+  { key: "placeholders", label: "Плейсхолдеры/теги" },
+  { key: "max_length", label: "Лимит длины" },
+  { key: "glossary", label: "Глоссарий (термины и формат чисел)" },
+  { key: "register", label: "Регистр (ты/вы)" },
+  { key: "typo", label: "Опечатки/искажения смысла" },
+  { key: "untranslatable", label: "Непереводимые термины" },
+  { key: "completeness", label: "Неполнота перевода" },
+  { key: "punctuation", label: "Пунктуация/пробелы" },
+];
+
 export default function MultiUpload({
   manager,
   project,
@@ -15,11 +27,17 @@ export default function MultiUpload({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sourceLang, setSourceLang] = useState("");
+  const [checks, setChecks] = useState<string[]>(CHECK_OPTIONS.map(c => c.key));
+  const [extraInstructions, setExtraInstructions] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<MultiCheckResponse | null>(null);
   const [history, setHistory] = useState<MultiCheckHistoryEntry[]>([]);
   const [openLang, setOpenLang] = useState<string | null>(null);
+
+  function toggleCheck(key: string) {
+    setChecks(prev => prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]);
+  }
 
   useEffect(() => {
     multiCheckHistory(project.id).then(setHistory).catch(() => {});
@@ -33,7 +51,7 @@ export default function MultiUpload({
     setError("");
     setResult(null);
     try {
-      const res = await multiCheck(project.id, file, sourceLang.trim(), manager.name);
+      const res = await multiCheck(project.id, file, sourceLang.trim(), manager.name, checks, extraInstructions);
       setResult(res);
       setOpenLang(res.summary.languages_checked[0] || null);
       multiCheckHistory(project.id).then(setHistory).catch(() => {});
@@ -70,6 +88,25 @@ export default function MultiUpload({
 
         <label>Исходный язык (необязательно — по умолчанию берётся колонка «en»)</label>
         <input value={sourceLang} onChange={e => setSourceLang(e.target.value)} placeholder="en" />
+
+        <div className="checks-row">
+          {CHECK_OPTIONS.map(c => (
+            <label key={c.key} className="check-chip">
+              <input type="checkbox" checked={checks.includes(c.key)} onChange={() => toggleCheck(c.key)} />
+              {c.label}
+            </label>
+          ))}
+        </div>
+
+        <div className="extra-instructions">
+          <label>Особые указания к этой задаче (необязательно, не сохраняется в проект)</label>
+          <textarea
+            value={extraInstructions}
+            onChange={e => setExtraInstructions(e.target.value)}
+            rows={2}
+            placeholder="Например: в этой задаче «Golden Spin» нужно переводить, а не оставлять как есть"
+          />
+        </div>
 
         <button type="submit" disabled={loading}>
           {loading ? "Проверяю все языки… это может занять пару минут" : "Проверить файл"}

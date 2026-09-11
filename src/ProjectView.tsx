@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { addLanguage, listLanguages, updateGlossary } from "./api";
-import type { Language, Manager, Project } from "./types";
+import { useEffect, useRef, useState } from "react";
+import { addLanguage, getGlossaryStatus, listLanguages, uploadGlossary } from "./api";
+import type { GlossaryStatus, Language, Manager, Project } from "./types";
 
 export default function ProjectView({
   manager,
   project,
-  onProjectChange,
+  onProjectChange: _onProjectChange,
   onOpenLanguage,
   onOpenMulti,
   onBack,
@@ -19,8 +19,9 @@ export default function ProjectView({
 }) {
   const [languages, setLanguages] = useState<Language[] | null>(null);
   const [newLangCode, setNewLangCode] = useState("");
-  const [glossary, setGlossary] = useState(project.glossary);
-  const [savingGlossary, setSavingGlossary] = useState(false);
+  const [glossaryStatus, setGlossaryStatus] = useState<GlossaryStatus | null>(null);
+  const glossaryFileRef = useRef<HTMLInputElement>(null);
+  const [uploadingGlossary, setUploadingGlossary] = useState(false);
   const [glossarySaved, setGlossarySaved] = useState(false);
   const [error, setError] = useState("");
 
@@ -29,7 +30,8 @@ export default function ProjectView({
   }, [project.id]);
 
   useEffect(() => {
-    setGlossary(project.glossary);
+    getGlossaryStatus(project.id).then(setGlossaryStatus).catch(() => {});
+    setGlossarySaved(false);
   }, [project.id]);
 
   async function submitAddLanguage(e: React.FormEvent) {
@@ -48,17 +50,22 @@ export default function ProjectView({
     }
   }
 
-  async function saveGlossary() {
-    setSavingGlossary(true);
+  async function submitGlossaryUpload(e: React.FormEvent) {
+    e.preventDefault();
+    const file = glossaryFileRef.current?.files?.[0];
+    if (!file) return;
+    setUploadingGlossary(true);
     setGlossarySaved(false);
+    setError("");
     try {
-      const updated = await updateGlossary(manager.id, project.id, glossary);
-      onProjectChange(updated);
+      const status = await uploadGlossary(manager.id, project.id, file);
+      setGlossaryStatus(status);
       setGlossarySaved(true);
-    } catch {
-      setError("Не удалось сохранить глоссарий.");
+      if (glossaryFileRef.current) glossaryFileRef.current.value = "";
+    } catch (err) {
+      setError(err instanceof Error ? `Не удалось загрузить глоссарий: ${err.message}` : "Не удалось загрузить глоссарий.");
     } finally {
-      setSavingGlossary(false);
+      setUploadingGlossary(false);
     }
   }
 
@@ -73,22 +80,30 @@ export default function ProjectView({
 
       <section className="glossary-section">
         <label>Глоссарий проекта (общий для всех языков)</label>
-        {manager.is_admin ? (
-          <>
-            <textarea
-              value={glossary}
-              onChange={e => { setGlossary(e.target.value); setGlossarySaved(false); }}
-              rows={4}
-              placeholder="Например: term1 → перевод1, term2 → перевод2"
-            />
-            <button onClick={saveGlossary} disabled={savingGlossary || glossary === project.glossary}>
-              {savingGlossary ? "Сохраняю…" : "Сохранить глоссарий"}
+        {glossaryStatus && glossaryStatus.term_count > 0 ? (
+          <div className="glossary-readonly">
+            📄 {glossaryStatus.filename} — {glossaryStatus.term_count} терминов
+            {glossaryStatus.uploaded_at && (
+              <span className="muted small"> (загружен {new Date(glossaryStatus.uploaded_at).toLocaleString("ru-RU")})</span>
+            )}
+          </div>
+        ) : (
+          <div className="glossary-readonly"><span className="muted">не загружен</span></div>
+        )}
+
+        {manager.is_admin && (
+          <form className="inline-form" onSubmit={submitGlossaryUpload}>
+            <input ref={glossaryFileRef} type="file" accept=".xlsx" />
+            <button type="submit" disabled={uploadingGlossary}>
+              {uploadingGlossary ? "Загружаю…" : "Загрузить глоссарий"}
             </button>
             {glossarySaved && <span className="muted small"> Сохранено.</span>}
-          </>
-        ) : (
-          <div className="glossary-readonly">{project.glossary || <span className="muted">не задан</span>}</div>
+          </form>
         )}
+        <p className="muted small">
+          Файл в том же формате, что и рабочий документ: колонка EN, пояснение, затем колонка на каждый язык.
+          Загрузка полностью заменяет предыдущий глоссарий.
+        </p>
       </section>
 
       <section>
