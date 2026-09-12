@@ -75,3 +75,16 @@ export function buildChecksToSend(selected: string[]): string[] {
 }
 
 export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medium: "Средне", low: "Мелочь" };
+
+// Real AI cost of a check, in USD — displayed in ru-RU style ("0,0031 $")
+// per Александр's request. Costs are often tiny (a few tenths of a cent),
+// so a fixed 2-decimal format would round almost everything down to
+// "0,00 $" and make the feature look broken — the precision is widened for
+// smaller amounts instead, so a genuine (if small) cost is always visible.
+export function formatCostRu(usd: number): string {
+  if (!usd || usd <= 0) return "0 $";
+  let decimals = 2;
+  if (usd < 0.01) decimals = 4;
+  if (usd < 0.0001) decimals = 6;
+  return `${usd.toFixed(decimals).replace(".", ",")} $`;
+}

@@ -50,6 +50,9 @@ export interface SingleCheckHistoryEntry {
   findings: Finding[];
   performed_by_name: string;
   created_at: string;
+  // Real Anthropic API cost of this check's AI calls, in USD (0 when it only
+  // used free rule-based criteria).
+  cost_usd: number;
 }
 
 export interface MultiCheckRowResult {
@@ -84,6 +87,9 @@ export interface MultiCheckResponse {
   filename?: string;
   summary?: MultiCheckSummary;
   sheets?: MultiCheckSheetResult[];
+  // Real Anthropic API cost of this check's AI calls, in USD — only present
+  // once status is "completed" (not known yet while "processing").
+  cost_usd?: number;
 }
 
 export interface MultiCheckHistoryEntry {
@@ -96,4 +102,7 @@ export interface MultiCheckHistoryEntry {
   summary: Partial<MultiCheckSummary>;
   performed_by_name: string;
   created_at: string;
+  // 0 while status is "processing" — real cost isn't known until the batch
+  // finishes.
+  cost_usd: number;
 }

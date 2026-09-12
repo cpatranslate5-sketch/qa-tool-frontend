@@ -146,7 +146,7 @@ export function runCheck(params: {
   extraInstructions?: string;
   managerName?: string;
   managerId?: number;
-}): Promise<{ findings: Finding[]; single_check_id: number | null }> {
+}): Promise<{ findings: Finding[]; single_check_id: number | null; cost_usd: number }> {
   return request("/check", {
     method: "POST",
     body: JSON.stringify({

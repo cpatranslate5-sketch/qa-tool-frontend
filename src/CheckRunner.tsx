@@ -4,7 +4,7 @@ import {
   knownLanguages, multiCheck, multiCheckDetail, multiCheckHistory, multiCheckReportUrl,
   runCheck, singleCheckHistory,
 } from "./api";
-import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, SEVERITY_LABEL } from "./lang";
+import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL } from "./lang";
 import type {
   Finding, GlossaryStatus, Manager, MultiCheckHistoryEntry, MultiCheckResponse,
   NumeralsStatus, Project, SingleCheckHistoryEntry, ToneStatus,
@@ -57,6 +57,7 @@ export default function CheckRunner({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [findings, setFindings] = useState<Finding[] | null>(null);
+  const [singleCost, setSingleCost] = useState(0);
   const [multiResult, setMultiResult] = useState<MultiCheckResponse | null>(null);
   const [openLang, setOpenLang] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
@@ -167,6 +168,7 @@ export default function CheckRunner({
           managerId: manager.id,
         });
         setFindings(res.findings);
+        setSingleCost(res.cost_usd);
         singleCheckHistory(project.id, manager.id).then(setSingleHistory).catch(() => {});
       } else {
         const file = fileInputRef.current?.files?.[0];
@@ -337,6 +339,7 @@ export default function CheckRunner({
       {findings !== null && (
         <div className="results">
           <h2>Результат</h2>
+          <p className="muted small">Проверка завершена, стоимость составила: {formatCostRu(singleCost)}</p>
           {findings.length === 0 && <div className="muted">Проблем не найдено.</div>}
           {findings.map((f, i) => (
             <div key={i} className={`finding finding-${f.severity}`}>
@@ -363,6 +366,7 @@ export default function CheckRunner({
           <h2>Результат — {multiResult.summary.total_findings} проблем в {multiResult.summary.languages_checked.length} языках</h2>
           <p className="muted small">
             Исходный язык: {multiResult.source_lang}. Строк проверено: {multiResult.summary.rows_checked}.
+            {" "}Проверка завершена, стоимость составила: {formatCostRu(multiResult.cost_usd || 0)}.
           </p>
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
@@ -426,6 +430,7 @@ export default function CheckRunner({
                 {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
                 {" — "}{flagForLang(h.source_lang)}→{flagForLang(h.target_lang)} {h.target_lang}
                 {" — "}{h.findings.length === 0 ? "без проблем" : `${h.findings.length} найдено`}
+                {" — "}{formatCostRu(h.cost_usd)}
               </summary>
               <div className="history-pair">
                 <div><strong>Источник:</strong> {h.source}</div>
@@ -456,7 +461,7 @@ export default function CheckRunner({
               {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
               {" — "}{h.filename}
               {" — "}
-              {h.status === "processing" ? "ещё обрабатывается…" : `${h.summary.total_findings ?? 0} проблем`}
+              {h.status === "processing" ? "ещё обрабатывается…" : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
             </button>
           ))}
         </div>
