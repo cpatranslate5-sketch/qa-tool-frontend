@@ -1,21 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import {
   deleteProject,
-  getGlossaryStatus, getNumeralsStatus, getToneStatus,
-  uploadGlossary, uploadNumerals, uploadTone,
+  getGlossaryStatus, getToneStatus,
+  uploadGlossary, uploadTone,
 } from "./api";
-import type { GlossaryStatus, Manager, NumeralsStatus, Project, ToneStatus } from "./types";
+import type { GlossaryStatus, Manager, Project, ToneStatus } from "./types";
 
-type DocKind = "glossary" | "numerals" | "tone";
+type DocKind = "glossary" | "tone";
 
 const DOC_META: Record<DocKind, { title: string; hint: string }> = {
   glossary: {
     title: "Глоссарий",
     hint: "Колонка EN, пояснение, затем колонка на каждый язык.",
-  },
-  numerals: {
-    title: "Нумералс",
-    hint: "Формат чисел, дат и т.п. по языкам — один или несколько листов.",
   },
   tone: {
     title: "Тон обращения",
@@ -99,7 +95,6 @@ export default function ProjectView({
   onBack: () => void;
 }) {
   const [glossaryStatus, setGlossaryStatus] = useState<GlossaryStatus | null>(null);
-  const [numeralsStatus, setNumeralsStatus] = useState<NumeralsStatus | null>(null);
   const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
   const [error, setError] = useState("");
 
@@ -110,7 +105,6 @@ export default function ProjectView({
 
   useEffect(() => {
     getGlossaryStatus(project.id).then(setGlossaryStatus).catch(() => {});
-    getNumeralsStatus(project.id).then(setNumeralsStatus).catch(() => {});
     getToneStatus(project.id).then(setToneStatus).catch(() => {});
   }, [project.id]);
 
@@ -146,12 +140,6 @@ export default function ProjectView({
             isAdmin={manager.is_admin}
             status={glossaryStatus ? { filename: glossaryStatus.filename, uploaded_at: glossaryStatus.uploaded_at, count: glossaryStatus.term_count } : null}
             onUploaded={async file => setGlossaryStatus(await uploadGlossary(manager.id, project.id, file))}
-          />
-          <DocCard
-            kind="numerals"
-            isAdmin={manager.is_admin}
-            status={numeralsStatus ? { filename: numeralsStatus.filename, uploaded_at: numeralsStatus.uploaded_at, count: numeralsStatus.rule_count } : null}
-            onUploaded={async file => setNumeralsStatus(await uploadNumerals(manager.id, project.id, file))}
           />
           <DocCard
             kind="tone"

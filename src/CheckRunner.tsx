@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getGlossaryStatus, getNumeralsStatus, getToneStatus,
+  getGlossaryStatus, getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckHistory, multiCheckReportUrl,
   runCheck, singleCheckHistory,
 } from "./api";
 import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL } from "./lang";
 import type {
   Finding, GlossaryStatus, Manager, MultiCheckHistoryEntry, MultiCheckResponse,
-  NumeralsStatus, Project, SingleCheckHistoryEntry, ToneStatus,
+  Project, SingleCheckHistoryEntry, ToneStatus,
 } from "./types";
 
 const SOURCE_LANGS = [
@@ -51,7 +51,6 @@ export default function CheckRunner({
 
   // --- doc status, for the missing-document warning ---
   const [glossaryStatus, setGlossaryStatus] = useState<GlossaryStatus | null>(null);
-  const [numeralsStatus, setNumeralsStatus] = useState<NumeralsStatus | null>(null);
   const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -68,7 +67,6 @@ export default function CheckRunner({
   useEffect(() => {
     knownLanguages(project.id).then(r => setAllLangs(r.languages)).catch(() => setAllLangs([]));
     getGlossaryStatus(project.id).then(setGlossaryStatus).catch(() => {});
-    getNumeralsStatus(project.id).then(setNumeralsStatus).catch(() => {});
     getToneStatus(project.id).then(setToneStatus).catch(() => {});
     singleCheckHistory(project.id, manager.id).then(setSingleHistory).catch(() => {});
     multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
@@ -126,14 +124,13 @@ export default function CheckRunner({
 
   const docStatusByRequirement: Record<string, { filename: string } | null> = {
     glossary: glossaryStatus && glossaryStatus.term_count > 0 ? glossaryStatus : null,
-    numerals: numeralsStatus && numeralsStatus.rule_count > 0 ? numeralsStatus : null,
     tone: toneStatus && toneStatus.rule_count > 0 ? toneStatus : null,
   };
-  const DOC_LABEL: Record<string, string> = { glossary: "Глоссарий", numerals: "Нумералс", tone: "Тон обращения" };
+  const DOC_LABEL: Record<string, string> = { glossary: "Глоссарий", tone: "Тон обращения" };
   const missingDocsForSelected = [...new Set(
     checks
       .map(c => CHECK_DOC_REQUIREMENT[c])
-      .filter((doc): doc is "glossary" | "numerals" | "tone" => !!doc && !docStatusByRequirement[doc])
+      .filter((doc): doc is "glossary" | "tone" => !!doc && !docStatusByRequirement[doc])
   )];
 
   const hasText = sourceText.trim() && translationText.trim();

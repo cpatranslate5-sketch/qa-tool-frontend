@@ -4,7 +4,6 @@ import type {
   Manager,
   MultiCheckHistoryEntry,
   MultiCheckResponse,
-  NumeralsStatus,
   Project,
   SingleCheckHistoryEntry,
   ToneStatus,
@@ -99,7 +98,7 @@ export function knownLanguages(projectId: number): Promise<{ languages: string[]
   return request(`/projects/${projectId}/known-languages`);
 }
 
-// --- reference documents (glossary / numerals / tone-of-address) ---
+// --- reference documents (glossary / tone-of-address) ---
 
 export function getGlossaryStatus(projectId: number): Promise<GlossaryStatus> {
   return request(`/projects/${projectId}/glossary/status`);
@@ -110,17 +109,6 @@ export function uploadGlossary(managerId: number, projectId: number, file: File)
   formData.append("file", file);
   formData.append("manager_id", String(managerId));
   return requestForm(`/projects/${projectId}/glossary/upload`, formData);
-}
-
-export function getNumeralsStatus(projectId: number): Promise<NumeralsStatus> {
-  return request(`/projects/${projectId}/numerals/status`);
-}
-
-export function uploadNumerals(managerId: number, projectId: number, file: File): Promise<NumeralsStatus> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("manager_id", String(managerId));
-  return requestForm(`/projects/${projectId}/numerals/upload`, formData);
 }
 
 export function getToneStatus(projectId: number): Promise<ToneStatus> {

@@ -9,8 +9,6 @@ export interface Project {
   name: string;
   glossary_filename: string;
   glossary_uploaded_at: string | null;
-  numerals_filename: string;
-  numerals_uploaded_at: string | null;
   tone_filename: string;
   tone_uploaded_at: string | null;
   created_by_name: string;
@@ -20,12 +18,6 @@ export interface GlossaryStatus {
   filename: string;
   uploaded_at: string | null;
   term_count: number;
-}
-
-export interface NumeralsStatus {
-  filename: string;
-  uploaded_at: string | null;
-  rule_count: number;
 }
 
 export interface ToneStatus {

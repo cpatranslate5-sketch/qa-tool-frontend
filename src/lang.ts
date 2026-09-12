@@ -45,7 +45,6 @@ export function langLabel(code: string): string {
 // CheckRunner's buildChecksToSend) rather than dropped — they're free and
 // already useful, no reason to lose them over a labeling choice.
 export const CHECK_OPTIONS: { key: string; label: string; kind: "ai" | "algo" }[] = [
-  { key: "numerals", label: "Нумералс (ИИ)", kind: "ai" },
   { key: "glossary", label: "Глоссарий (ИИ)", kind: "ai" },
   { key: "register", label: "Тон обращения (ИИ)", kind: "ai" },
   { key: "untranslatable", label: "Непереводимые термины (ИИ)", kind: "ai" },
@@ -58,9 +57,8 @@ export const CHECK_OPTIONS: { key: string; label: string; kind: "ai" | "algo" }[
 // Which uploaded doc (if any) a check requires — mirrors the backend's
 // _require_doc, so the UI can warn before the user even presses start
 // rather than only after a 400 comes back.
-export const CHECK_DOC_REQUIREMENT: Record<string, "glossary" | "numerals" | "tone"> = {
+export const CHECK_DOC_REQUIREMENT: Record<string, "glossary" | "tone"> = {
   glossary: "glossary",
-  numerals: "numerals",
   register: "tone",
 };
 
