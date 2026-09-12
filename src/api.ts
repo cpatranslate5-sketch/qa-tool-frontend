@@ -97,6 +97,18 @@ export function knownLanguages(projectId: number): Promise<{ languages: string[]
   return request(`/projects/${projectId}/known-languages`);
 }
 
+// Language codes actually found as column headers in an uploaded file —
+// used once a file is selected in the multi-check flow, so the target-
+// language checkboxes reflect what's really IN this file rather than only
+// what the project's Tone document happens to mention (a language can be
+// legitimately present in the file without ever needing a tone-of-address
+// rule — English chiefly, which rarely needs a ты/вы-style distinction).
+export function detectFileLanguages(projectId: number, file: File): Promise<{ languages: string[] }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestForm(`/projects/${projectId}/multi-check/detect-languages`, formData);
+}
+
 // --- reference documents (tone-of-address) ---
 
 export function getToneStatus(projectId: number): Promise<ToneStatus> {

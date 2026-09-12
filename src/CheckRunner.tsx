@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getToneStatus,
+  detectFileLanguages, getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckHistory, multiCheckReportUrl,
   runCheck, singleCheckHistory,
 } from "./api";
@@ -40,6 +40,13 @@ export default function CheckRunner({
 
   // --- target language(s): single choice for a text pair, multi for a file ---
   const [allLangs, setAllLangs] = useState<string[] | null>(null);
+  // Languages actually found in the currently-selected FILE (file mode
+  // only) — takes over from allLangs (the project's Tone document) once a
+  // file is chosen, since the file itself is the real source of truth for
+  // "what target languages exist here". null before any file is picked, or
+  // if detection failed (falls back to allLangs either way).
+  const [fileLangs, setFileLangs] = useState<string[] | null>(null);
+  const [fileLangsLoading, setFileLangsLoading] = useState(false);
   const [targetLangSingle, setTargetLangSingle] = useState("");
   const [targetLangsMulti, setTargetLangsMulti] = useState<string[]>([]);
 
@@ -105,7 +112,34 @@ export default function CheckRunner({
     };
   }, [multiResult, project.id, manager.id]);
 
-  const targetCandidates = (allLangs || []).filter(l => baseLang(l) !== sourceLang);
+  // In file mode, once a file has been picked, its OWN languages are the
+  // source of truth for what can be checked — falls back to the project's
+  // Tone-document languages before a file is chosen, or in text mode.
+  const targetLangSource = mode === "file" && fileLangs !== null ? fileLangs : (allLangs || []);
+  const targetCandidates = targetLangSource.filter(l => baseLang(l) !== sourceLang);
+  const targetsReady = mode === "file"
+    ? (fileLangs !== null || (!fileLangsLoading && allLangs !== null))
+    : allLangs !== null;
+
+  async function onFileChosen(file: File | undefined) {
+    setFileName(file?.name || "");
+    setTargetLangsMulti([]);
+    if (!file) {
+      setFileLangs(null);
+      return;
+    }
+    setFileLangsLoading(true);
+    try {
+      const r = await detectFileLanguages(project.id, file);
+      setFileLangs(r.languages);
+    } catch {
+      // Falls back to the Tone document's languages (targetLangSource
+      // above) rather than blocking the manager from checking at all.
+      setFileLangs(null);
+    } finally {
+      setFileLangsLoading(false);
+    }
+  }
 
   function toggleCheck(key: string) {
     setChecks(prev => (prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]));
@@ -244,7 +278,7 @@ export default function CheckRunner({
               ref={fileInputRef}
               type="file"
               accept=".xlsx"
-              onChange={e => setFileName(e.target.files?.[0]?.name || "")}
+              onChange={e => onFileChosen(e.target.files?.[0])}
             />
           </div>
         )}
@@ -253,10 +287,17 @@ export default function CheckRunner({
       <div className="step">
         <div className="step-title">2. Выбор целевых языков</div>
         {!sourceLang && <p className="muted small">Сначала выберите язык оригинала.</p>}
-        {sourceLang && allLangs === null && <p className="muted small">Загрузка списка языков…</p>}
-        {sourceLang && allLangs !== null && targetCandidates.length === 0 && (
+        {sourceLang && mode === "file" && fileLangsLoading && (
+          <p className="muted small">Определяю языки в файле…</p>
+        )}
+        {sourceLang && !(mode === "file" && fileLangsLoading) && !targetsReady && (
+          <p className="muted small">Загрузка списка языков…</p>
+        )}
+        {sourceLang && !(mode === "file" && fileLangsLoading) && targetsReady && targetCandidates.length === 0 && (
           <p className="muted small">
-            В документах проекта (Тон обращения) пока не найдено ни одного языка, кроме языка оригинала.
+            {mode === "file" && fileLangs !== null
+              ? "В этом файле не найдено ни одного языка, кроме языка оригинала."
+              : "В документах проекта (Тон обращения) пока не найдено ни одного языка, кроме языка оригинала."}
           </p>
         )}
         {sourceLang && mode === "file" && targetCandidates.length > 0 && (
