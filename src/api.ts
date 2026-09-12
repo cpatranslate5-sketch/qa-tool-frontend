@@ -66,6 +66,15 @@ export function changePassword(managerId: number, currentCode: string, newCode: 
   });
 }
 
+// Lets someone who already has admin access on this device open any other
+// folder without typing that folder's own password (see FolderPicker.tsx).
+export function adminEnterManager(managerId: number, adminManagerId: number): Promise<Manager> {
+  return request(`/managers/${managerId}/admin-enter`, {
+    method: "POST",
+    body: JSON.stringify({ admin_manager_id: adminManagerId }),
+  });
+}
+
 // --- projects (shared; structural changes require an admin manager_id) ---
 
 export function listProjects(): Promise<Project[]> {
@@ -136,6 +145,7 @@ export function runCheck(params: {
   targetLang: string;
   extraInstructions?: string;
   managerName?: string;
+  managerId?: number;
 }): Promise<{ findings: Finding[]; single_check_id: number | null }> {
   return request("/check", {
     method: "POST",
@@ -148,12 +158,15 @@ export function runCheck(params: {
       target_lang: params.targetLang,
       extra_instructions: params.extraInstructions || "",
       manager_name: params.managerName || "",
+      manager_id: params.managerId ?? null,
     }),
   });
 }
 
-export function singleCheckHistory(projectId: number): Promise<SingleCheckHistoryEntry[]> {
-  return request(`/projects/${projectId}/history`);
+// History is scoped to the requesting folder only — each manager only sees
+// their own runs (not every folder's), so managerId is required.
+export function singleCheckHistory(projectId: number, managerId: number): Promise<SingleCheckHistoryEntry[]> {
+  return request(`/projects/${projectId}/history?manager_id=${managerId}`);
 }
 
 // --- checking: an uploaded document (one or more target languages) ---
@@ -163,6 +176,7 @@ export function multiCheck(
   file: File,
   sourceLang: string,
   managerName: string,
+  managerId: number,
   checks: string[],
   extraInstructions: string,
   targetLangs: string[]
@@ -171,20 +185,21 @@ export function multiCheck(
   formData.append("file", file);
   formData.append("source_lang", sourceLang);
   formData.append("manager_name", managerName);
+  formData.append("manager_id", String(managerId));
   formData.append("checks", checks.join(","));
   formData.append("extra_instructions", extraInstructions);
   formData.append("target_langs", targetLangs.join(","));
   return requestForm(`/projects/${projectId}/multi-check`, formData);
 }
 
-export function multiCheckHistory(projectId: number): Promise<MultiCheckHistoryEntry[]> {
-  return request(`/projects/${projectId}/multi-check`);
+export function multiCheckHistory(projectId: number, managerId: number): Promise<MultiCheckHistoryEntry[]> {
+  return request(`/projects/${projectId}/multi-check?manager_id=${managerId}`);
 }
 
-export function multiCheckDetail(projectId: number, multiCheckId: number): Promise<MultiCheckResponse> {
-  return request(`/projects/${projectId}/multi-check/${multiCheckId}`);
+export function multiCheckDetail(projectId: number, multiCheckId: number, managerId: number): Promise<MultiCheckResponse> {
+  return request(`/projects/${projectId}/multi-check/${multiCheckId}?manager_id=${managerId}`);
 }
 
-export function multiCheckReportUrl(projectId: number, multiCheckId: number): string {
-  return `${API_URL}/projects/${projectId}/multi-check/${multiCheckId}/report.xlsx`;
+export function multiCheckReportUrl(projectId: number, multiCheckId: number, managerId: number): string {
+  return `${API_URL}/projects/${projectId}/multi-check/${multiCheckId}/report.xlsx?manager_id=${managerId}`;
 }

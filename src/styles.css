@@ -161,6 +161,14 @@ button:disabled { opacity: 0.5; cursor: default; }
   text-align: left;
 }
 .folder-card:hover { border-color: var(--accent); }
+/* Admin folder is always listed first (backend orders it there) and stands
+   out with the app's accent color, so it's unmistakable at a glance. */
+.folder-card-admin {
+  border-color: var(--accent);
+  background: var(--panel-2);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 .multi-card { display: block; margin-top: 4px; }
 
 .doc-section { margin-bottom: 8px; }

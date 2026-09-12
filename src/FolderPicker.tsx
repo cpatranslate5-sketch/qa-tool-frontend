@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createManagerFolder, listManagers, unlockManagerFolder } from "./api";
+import { adminEnterManager, createManagerFolder, listManagers, unlockManagerFolder } from "./api";
 import type { Manager } from "./types";
 
 const TRUSTED_KEY = "qa-tool-trusted-managers";
@@ -44,6 +44,23 @@ export default function FolderPicker({ onEnter }: { onEnter: (manager: Manager) 
   function openFolder(manager: Manager) {
     if (trustedIds.has(manager.id)) {
       onEnter(manager);
+      return;
+    }
+    // Whoever already has admin access on this device can open any other
+    // folder without typing that folder's own password (point 2 of
+    // Александр's folder-access spec) — the admin's own trusted status
+    // was already proven once (see rememberTrusted), so this just asks
+    // the server to confirm that and hand back the target folder.
+    const trustedAdmin = trusted.find(m => m.is_admin);
+    if (trustedAdmin) {
+      setError("");
+      adminEnterManager(manager.id, trustedAdmin.id)
+        .then(entered => {
+          rememberTrusted(entered);
+          setTrusted(loadTrusted());
+          onEnter(entered);
+        })
+        .catch(() => setError("Не удалось открыть папку через админский доступ."));
       return;
     }
     setActiveManager(manager);
@@ -144,9 +161,13 @@ export default function FolderPicker({ onEnter }: { onEnter: (manager: Manager) 
 
       <div className="folder-grid">
         {managers?.map(m => (
-          <button key={m.id} className="folder-card" onClick={() => openFolder(m)}>
+          <button
+            key={m.id}
+            className={`folder-card ${m.is_admin ? "folder-card-admin" : ""}`}
+            onClick={() => openFolder(m)}
+          >
             📁 {m.name}{m.is_admin ? " (админ)" : ""}
-            {!trustedIds.has(m.id) && <span className="muted small lock-hint"> 🔒</span>}
+            {!trustedIds.has(m.id) && !trusted.some(t => t.is_admin) && <span className="muted small lock-hint"> 🔒</span>}
           </button>
         ))}
         <button className="folder-card create-folder-card" onClick={() => { setMode("create"); setError(""); }}>

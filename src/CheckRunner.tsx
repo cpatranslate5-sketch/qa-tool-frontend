@@ -69,9 +69,9 @@ export default function CheckRunner({
     getGlossaryStatus(project.id).then(setGlossaryStatus).catch(() => {});
     getNumeralsStatus(project.id).then(setNumeralsStatus).catch(() => {});
     getToneStatus(project.id).then(setToneStatus).catch(() => {});
-    singleCheckHistory(project.id).then(setSingleHistory).catch(() => {});
-    multiCheckHistory(project.id).then(setMultiHistory).catch(() => {});
-  }, [project.id]);
+    singleCheckHistory(project.id, manager.id).then(setSingleHistory).catch(() => {});
+    multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
+  }, [project.id, manager.id]);
 
   // reset target-language choices whenever the source language changes, since
   // the exclusion rule (source can't also be a target) depends on it
@@ -89,12 +89,12 @@ export default function CheckRunner({
     const timer = setInterval(async () => {
       setPolling(true);
       try {
-        const res = await multiCheckDetail(project.id, id);
+        const res = await multiCheckDetail(project.id, id, manager.id);
         if (cancelled) return;
         if (res.status === "completed") {
           setMultiResult(res);
           setOpenLang(res.summary?.languages_checked[0] || null);
-          multiCheckHistory(project.id).then(setMultiHistory).catch(() => {});
+          multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
         }
       } catch {
         /* transient — just try again next tick */
@@ -106,7 +106,7 @@ export default function CheckRunner({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [multiResult, project.id]);
+  }, [multiResult, project.id, manager.id]);
 
   const targetCandidates = (allLangs || []).filter(l => baseLang(l) !== sourceLang);
 
@@ -164,16 +164,17 @@ export default function CheckRunner({
           targetLang: targetLangSingle,
           extraInstructions: comment,
           managerName: manager.name,
+          managerId: manager.id,
         });
         setFindings(res.findings);
-        singleCheckHistory(project.id).then(setSingleHistory).catch(() => {});
+        singleCheckHistory(project.id, manager.id).then(setSingleHistory).catch(() => {});
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
-        const res = await multiCheck(project.id, file, sourceLang, manager.name, checksToSend, comment, targetLangsMulti);
+        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti);
         setMultiResult(res);
         setOpenLang(res.summary?.languages_checked[0] || null);
-        multiCheckHistory(project.id).then(setMultiHistory).catch(() => {});
+        multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
       }
     } catch (err) {
       setError(err instanceof Error ? `Не удалось выполнить проверку: ${err.message}` : "Не удалось выполнить проверку.");
@@ -185,7 +186,7 @@ export default function CheckRunner({
   async function openMultiHistoryEntry(id: number) {
     setError("");
     try {
-      const res = await multiCheckDetail(project.id, id);
+      const res = await multiCheckDetail(project.id, id, manager.id);
       setMultiResult(res);
       setFindings(null);
       setOpenLang(res.summary?.languages_checked[0] || null);
@@ -366,7 +367,7 @@ export default function CheckRunner({
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
           )}
-          <a className="download-link" href={multiCheckReportUrl(project.id, multiResult.multi_check_id)}>
+          <a className="download-link" href={multiCheckReportUrl(project.id, multiResult.multi_check_id, manager.id)}>
             ⬇ Скачать отчёт (Excel)
           </a>
 
