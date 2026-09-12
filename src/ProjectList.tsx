@@ -6,13 +6,16 @@ export default function ProjectList({
   manager,
   onOpenProject,
   onSwitchFolder,
+  onOpenChangePassword,
 }: {
   manager: Manager;
   onOpenProject: (project: Project) => void;
   onSwitchFolder: () => void;
+  onOpenChangePassword: () => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [newName, setNewName] = useState("");
+  const [copyFromId, setCopyFromId] = useState("");
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -26,9 +29,10 @@ export default function ProjectList({
     setCreating(true);
     setError("");
     try {
-      const project = await createProject(manager.id, newName.trim());
+      const project = await createProject(manager.id, newName.trim(), copyFromId ? Number(copyFromId) : undefined);
       setProjects(prev => [...(prev || []), project].sort((a, b) => a.name.localeCompare(b.name)));
       setNewName("");
+      setCopyFromId("");
     } catch (err) {
       setError(err instanceof Error && err.message === "409" ? "Проект с таким названием уже есть." : "Не удалось создать проект.");
     } finally {
@@ -40,7 +44,10 @@ export default function ProjectList({
     <div className="page">
       <div className="top-bar">
         <h1>Проекты — {manager.name}{manager.is_admin ? " (админ)" : ""}</h1>
-        <button className="link-button" onClick={onSwitchFolder}>Сменить папку</button>
+        <div className="top-bar-actions">
+          <button className="link-button" onClick={onOpenChangePassword}>Сменить пароль</button>
+          <button className="link-button" onClick={onSwitchFolder}>Сменить папку</button>
+        </div>
       </div>
 
       {error && <div className="error-box">{error}</div>}
@@ -52,6 +59,14 @@ export default function ProjectList({
             onChange={e => setNewName(e.target.value)}
             placeholder="Название нового проекта"
           />
+          {projects && projects.length > 0 && (
+            <select value={copyFromId} onChange={e => setCopyFromId(e.target.value)}>
+              <option value="">Начать с нуля</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>Скопировать документы из «{p.name}»</option>
+              ))}
+            </select>
+          )}
           <button type="submit" disabled={creating || !newName.trim()}>
             {creating ? "Создаю…" : "Создать проект"}
           </button>

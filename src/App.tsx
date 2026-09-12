@@ -1,20 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import ChangePasswordModal from "./ChangePasswordModal";
+import CheckRunner from "./CheckRunner";
 import FolderPicker from "./FolderPicker";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
-import LanguageCheck from "./LanguageCheck";
-import MultiUpload from "./MultiUpload";
-import type { Language, Manager, Project } from "./types";
+import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
+import type { Manager, Project } from "./types";
 
 type View =
   | { name: "projects" }
   | { name: "project"; project: Project }
-  | { name: "language"; project: Project; language: Language }
-  | { name: "multi"; project: Project };
+  | { name: "check"; project: Project };
 
 export default function App() {
   const [manager, setManager] = useState<Manager | null>(null);
   const [view, setView] = useState<View>({ name: "projects" });
+  const [theme, setTheme] = useState<Theme>(loadTheme());
+  const [showChangePassword, setShowChangePassword] = useState(false);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    saveTheme(next);
+  }
 
   function handleEnter(m: Manager) {
     setManager(m);
@@ -26,49 +38,43 @@ export default function App() {
     setView({ name: "projects" });
   }
 
-  if (!manager) {
-    return <FolderPicker onEnter={handleEnter} />;
-  }
-
-  if (view.name === "projects") {
-    return (
-      <ProjectList
-        manager={manager}
-        onOpenProject={project => setView({ name: "project", project })}
-        onSwitchFolder={handleSwitchFolder}
-      />
-    );
-  }
-
-  if (view.name === "project") {
-    return (
-      <ProjectView
-        manager={manager}
-        project={view.project}
-        onProjectChange={project => setView({ name: "project", project })}
-        onOpenLanguage={language => setView({ name: "language", project: view.project, language })}
-        onOpenMulti={() => setView({ name: "multi", project: view.project })}
-        onBack={() => setView({ name: "projects" })}
-      />
-    );
-  }
-
-  if (view.name === "language") {
-    return (
-      <LanguageCheck
-        manager={manager}
-        project={view.project}
-        language={view.language}
-        onBack={() => setView({ name: "project", project: view.project })}
-      />
-    );
-  }
+  const themeToggle = (
+    <button className="theme-toggle" onClick={toggleTheme}>
+      {theme === "dark" ? "☀ Светлая тема" : "🌙 Тёмная тема"}
+    </button>
+  );
 
   return (
-    <MultiUpload
-      manager={manager}
-      project={view.project}
-      onBack={() => setView({ name: "project", project: view.project })}
-    />
+    <>
+      {themeToggle}
+      {showChangePassword && manager && (
+        <ChangePasswordModal manager={manager} onClose={() => setShowChangePassword(false)} />
+      )}
+
+      {!manager ? (
+        <FolderPicker onEnter={handleEnter} />
+      ) : view.name === "projects" ? (
+        <ProjectList
+          manager={manager}
+          onOpenProject={project => setView({ name: "project", project })}
+          onSwitchFolder={handleSwitchFolder}
+          onOpenChangePassword={() => setShowChangePassword(true)}
+        />
+      ) : view.name === "project" ? (
+        <ProjectView
+          manager={manager}
+          project={view.project}
+          onOpenCheck={() => setView({ name: "check", project: view.project })}
+          onProjectDeleted={() => setView({ name: "projects" })}
+          onBack={() => setView({ name: "projects" })}
+        />
+      ) : (
+        <CheckRunner
+          manager={manager}
+          project={view.project}
+          onBack={() => setView({ name: "project", project: view.project })}
+        />
+      )}
+    </>
   );
 }

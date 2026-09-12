@@ -1,12 +1,13 @@
 import type {
   Finding,
   GlossaryStatus,
-  Language,
   Manager,
   MultiCheckHistoryEntry,
   MultiCheckResponse,
+  NumeralsStatus,
   Project,
   SingleCheckHistoryEntry,
+  ToneStatus,
 } from "./types";
 
 export const API_URL = import.meta.env.VITE_API_URL || "https://web-production-f70ad.up.railway.app";
@@ -16,6 +17,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
+  if (!res.ok) {
+    let detail = String(res.status);
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+async function requestForm<T>(path: string, formData: FormData, method = "POST"): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, { method, body: formData });
   if (!res.ok) {
     let detail = String(res.status);
     try {
@@ -43,58 +59,81 @@ export function unlockManagerFolder(managerId: number, code: string): Promise<Ma
   return request(`/managers/${managerId}/unlock`, { method: "POST", body: JSON.stringify({ code }) });
 }
 
+export function changePassword(managerId: number, currentCode: string, newCode: string): Promise<Manager> {
+  return request(`/managers/${managerId}/change-password`, {
+    method: "POST",
+    body: JSON.stringify({ current_code: currentCode, new_code: newCode }),
+  });
+}
+
 // --- projects (shared; structural changes require an admin manager_id) ---
 
 export function listProjects(): Promise<Project[]> {
   return request("/projects");
 }
 
-export function createProject(managerId: number, name: string): Promise<Project> {
-  return request("/projects", { method: "POST", body: JSON.stringify({ name, manager_id: managerId }) });
+export function createProject(managerId: number, name: string, copyFromProjectId?: number): Promise<Project> {
+  return request("/projects", {
+    method: "POST",
+    body: JSON.stringify({ name, manager_id: managerId, copy_from_project_id: copyFromProjectId ?? null }),
+  });
 }
+
+export function deleteProject(projectId: number, managerId: number, code: string): Promise<void> {
+  return request(`/projects/${projectId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ manager_id: managerId, code }),
+  });
+}
+
+export function knownLanguages(projectId: number): Promise<{ languages: string[] }> {
+  return request(`/projects/${projectId}/known-languages`);
+}
+
+// --- reference documents (glossary / numerals / tone-of-address) ---
 
 export function getGlossaryStatus(projectId: number): Promise<GlossaryStatus> {
   return request(`/projects/${projectId}/glossary/status`);
 }
 
-// Admin-only — replaces the whole project glossary with the uploaded file
-// (EN column, optional description column, then one column per language).
-export async function uploadGlossary(managerId: number, projectId: number, file: File): Promise<GlossaryStatus> {
+export function uploadGlossary(managerId: number, projectId: number, file: File): Promise<GlossaryStatus> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("manager_id", String(managerId));
-  const res = await fetch(`${API_URL}/projects/${projectId}/glossary/upload`, { method: "POST", body: formData });
-  if (!res.ok) {
-    let detail = String(res.status);
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  return res.json();
+  return requestForm(`/projects/${projectId}/glossary/upload`, formData);
 }
 
-export function listLanguages(projectId: number): Promise<Language[]> {
-  return request(`/projects/${projectId}/languages`);
+export function getNumeralsStatus(projectId: number): Promise<NumeralsStatus> {
+  return request(`/projects/${projectId}/numerals/status`);
 }
 
-export function addLanguage(managerId: number, projectId: number, langCode: string): Promise<Language> {
-  return request(`/projects/${projectId}/languages`, {
-    method: "POST",
-    body: JSON.stringify({ lang_code: langCode, manager_id: managerId }),
-  });
+export function uploadNumerals(managerId: number, projectId: number, file: File): Promise<NumeralsStatus> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("manager_id", String(managerId));
+  return requestForm(`/projects/${projectId}/numerals/upload`, formData);
 }
+
+export function getToneStatus(projectId: number): Promise<ToneStatus> {
+  return request(`/projects/${projectId}/tone/status`);
+}
+
+export function uploadTone(managerId: number, projectId: number, file: File): Promise<ToneStatus> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("manager_id", String(managerId));
+  return requestForm(`/projects/${projectId}/tone/upload`, formData);
+}
+
+// --- checking: one text pair (single target language) ---
 
 export function runCheck(params: {
   source: string;
   translation: string;
   checks: string[];
-  projectId?: number;
-  languageId?: number;
-  glossary?: string;
+  projectId: number;
+  sourceLang: string;
+  targetLang: string;
   extraInstructions?: string;
   managerName?: string;
 }): Promise<{ findings: Finding[]; single_check_id: number | null }> {
@@ -105,25 +144,28 @@ export function runCheck(params: {
       translation: params.translation,
       checks: params.checks,
       project_id: params.projectId,
-      language_id: params.languageId,
-      glossary: params.glossary || "",
+      source_lang: params.sourceLang,
+      target_lang: params.targetLang,
       extra_instructions: params.extraInstructions || "",
       manager_name: params.managerName || "",
     }),
   });
 }
 
-export function singleCheckHistory(projectId: number, languageId: number): Promise<SingleCheckHistoryEntry[]> {
-  return request(`/projects/${projectId}/languages/${languageId}/history`);
+export function singleCheckHistory(projectId: number): Promise<SingleCheckHistoryEntry[]> {
+  return request(`/projects/${projectId}/history`);
 }
 
-export async function multiCheck(
+// --- checking: an uploaded document (one or more target languages) ---
+
+export function multiCheck(
   projectId: number,
   file: File,
   sourceLang: string,
   managerName: string,
   checks: string[],
-  extraInstructions: string
+  extraInstructions: string,
+  targetLangs: string[]
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -131,21 +173,8 @@ export async function multiCheck(
   formData.append("manager_name", managerName);
   formData.append("checks", checks.join(","));
   formData.append("extra_instructions", extraInstructions);
-  const res = await fetch(`${API_URL}/projects/${projectId}/multi-check`, {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    let detail = String(res.status);
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  return res.json();
+  formData.append("target_langs", targetLangs.join(","));
+  return requestForm(`/projects/${projectId}/multi-check`, formData);
 }
 
 export function multiCheckHistory(projectId: number): Promise<MultiCheckHistoryEntry[]> {

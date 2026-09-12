@@ -9,6 +9,10 @@ export interface Project {
   name: string;
   glossary_filename: string;
   glossary_uploaded_at: string | null;
+  numerals_filename: string;
+  numerals_uploaded_at: string | null;
+  tone_filename: string;
+  tone_uploaded_at: string | null;
   created_by_name: string;
 }
 
@@ -18,9 +22,16 @@ export interface GlossaryStatus {
   term_count: number;
 }
 
-export interface Language {
-  id: number;
-  lang_code: string;
+export interface NumeralsStatus {
+  filename: string;
+  uploaded_at: string | null;
+  rule_count: number;
+}
+
+export interface ToneStatus {
+  filename: string;
+  uploaded_at: string | null;
+  rule_count: number;
 }
 
 export interface Finding {
@@ -31,6 +42,8 @@ export interface Finding {
 
 export interface SingleCheckHistoryEntry {
   id: number;
+  source_lang: string;
+  target_lang: string;
   source: string;
   translation: string;
   checks_run: string[];
@@ -65,15 +78,22 @@ export interface MultiCheckSummary {
 export interface MultiCheckResponse {
   multi_check_id: number;
   source_lang: string;
-  summary: MultiCheckSummary;
-  sheets: MultiCheckSheetResult[];
+  // "processing" means a big job was handed to Anthropic's cheaper-but-slower
+  // batch queue — summary/sheets aren't ready yet, poll the detail endpoint.
+  status: "processing" | "completed";
+  filename?: string;
+  summary?: MultiCheckSummary;
+  sheets?: MultiCheckSheetResult[];
 }
 
 export interface MultiCheckHistoryEntry {
   id: number;
   filename: string;
   source_lang: string;
-  summary: MultiCheckSummary;
+  status: "processing" | "completed";
+  // {} (empty) while status is "processing" — the backend hasn't computed
+  // a summary yet at that point, so every field is optional here.
+  summary: Partial<MultiCheckSummary>;
   performed_by_name: string;
   created_at: string;
 }
