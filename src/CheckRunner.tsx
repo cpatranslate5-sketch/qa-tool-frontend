@@ -254,7 +254,7 @@ export default function CheckRunner({
       </div>
 
       <div className="step">
-        <div className="step-title">Выбор целевых {mode === "file" ? "языков" : "языка"}</div>
+        <div className="step-title">2. Выбор целевых языков</div>
         {!sourceLang && <p className="muted small">Сначала выберите язык оригинала.</p>}
         {sourceLang && allLangs === null && <p className="muted small">Загрузка списка языков…</p>}
         {sourceLang && allLangs !== null && targetCandidates.length === 0 && (
@@ -295,7 +295,7 @@ export default function CheckRunner({
       </div>
 
       <div className="step">
-        <div className="step-title">2. Выбор критериев проверки</div>
+        <div className="step-title">3. Выбор критериев проверки</div>
         <label className="check-chip select-all">
           <input type="checkbox" checked={checks.length === CHECK_OPTIONS.length} onChange={toggleAllChecks} />
           Выбрать все
@@ -317,12 +317,12 @@ export default function CheckRunner({
       </div>
 
       <div className="step extra-instructions">
-        <label>Комментарий к задаче (необязательно)</label>
+        <div className="step-title">4. Комментарий к задаче (опционально)</div>
         <textarea
           value={comment}
           onChange={e => setComment(e.target.value)}
           rows={2}
-          placeholder="Например: в этой задаче «Golden Spin» нужно переводить, а не оставлять как есть"
+          placeholder='Например: в этой задаче особое условие оставить "Points" на английском там, где в оригинале написано с большой буквы'
         />
       </div>
 
