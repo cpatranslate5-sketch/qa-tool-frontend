@@ -1,18 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   deleteProject,
-  getGlossaryStatus, getToneStatus,
-  uploadGlossary, uploadTone,
+  getToneStatus,
+  uploadTone,
 } from "./api";
-import type { GlossaryStatus, Manager, Project, ToneStatus } from "./types";
+import type { Manager, Project, ToneStatus } from "./types";
 
-type DocKind = "glossary" | "tone";
+type DocKind = "tone";
 
 const DOC_META: Record<DocKind, { title: string; hint: string }> = {
-  glossary: {
-    title: "Глоссарий",
-    hint: "Колонка EN, пояснение, затем колонка на каждый язык.",
-  },
   tone: {
     title: "Тон обращения",
     hint: "Колонка на каждый язык, регистр обращения (ты/вы и т.п.).",
@@ -59,7 +55,7 @@ function DocCard({
       <label>{meta.title}</label>
       {status && status.count > 0 ? (
         <div className="doc-readonly">
-          📄 {status.filename} — {status.count} {kind === "glossary" ? "терминов" : "языков"}
+          📄 {status.filename} — {status.count} языков
           {status.uploaded_at && (
             <span className="muted small"> (загружен {new Date(status.uploaded_at).toLocaleString("ru-RU")})</span>
           )}
@@ -94,7 +90,6 @@ export default function ProjectView({
   onProjectDeleted: () => void;
   onBack: () => void;
 }) {
-  const [glossaryStatus, setGlossaryStatus] = useState<GlossaryStatus | null>(null);
   const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
   const [error, setError] = useState("");
 
@@ -104,7 +99,6 @@ export default function ProjectView({
   const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
-    getGlossaryStatus(project.id).then(setGlossaryStatus).catch(() => {});
     getToneStatus(project.id).then(setToneStatus).catch(() => {});
   }, [project.id]);
 
@@ -135,12 +129,6 @@ export default function ProjectView({
       <section>
         <h2>Документы проекта</h2>
         <div className="doc-grid">
-          <DocCard
-            kind="glossary"
-            isAdmin={manager.is_admin}
-            status={glossaryStatus ? { filename: glossaryStatus.filename, uploaded_at: glossaryStatus.uploaded_at, count: glossaryStatus.term_count } : null}
-            onUploaded={async file => setGlossaryStatus(await uploadGlossary(manager.id, project.id, file))}
-          />
           <DocCard
             kind="tone"
             isAdmin={manager.is_admin}

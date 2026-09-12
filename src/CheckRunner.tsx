@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getGlossaryStatus, getToneStatus,
+  getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckHistory, multiCheckReportUrl,
   runCheck, singleCheckHistory,
 } from "./api";
 import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL } from "./lang";
 import type {
-  Finding, GlossaryStatus, Manager, MultiCheckHistoryEntry, MultiCheckResponse,
+  Finding, Manager, MultiCheckHistoryEntry, MultiCheckResponse,
   Project, SingleCheckHistoryEntry, ToneStatus,
 } from "./types";
 
@@ -50,7 +50,6 @@ export default function CheckRunner({
   const [comment, setComment] = useState("");
 
   // --- doc status, for the missing-document warning ---
-  const [glossaryStatus, setGlossaryStatus] = useState<GlossaryStatus | null>(null);
   const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -66,7 +65,6 @@ export default function CheckRunner({
 
   useEffect(() => {
     knownLanguages(project.id).then(r => setAllLangs(r.languages)).catch(() => setAllLangs([]));
-    getGlossaryStatus(project.id).then(setGlossaryStatus).catch(() => {});
     getToneStatus(project.id).then(setToneStatus).catch(() => {});
     singleCheckHistory(project.id, manager.id).then(setSingleHistory).catch(() => {});
     multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
@@ -123,14 +121,13 @@ export default function CheckRunner({
   }
 
   const docStatusByRequirement: Record<string, { filename: string } | null> = {
-    glossary: glossaryStatus && glossaryStatus.term_count > 0 ? glossaryStatus : null,
     tone: toneStatus && toneStatus.rule_count > 0 ? toneStatus : null,
   };
-  const DOC_LABEL: Record<string, string> = { glossary: "Глоссарий", tone: "Тон обращения" };
+  const DOC_LABEL: Record<string, string> = { tone: "Тон обращения" };
   const missingDocsForSelected = [...new Set(
     checks
       .map(c => CHECK_DOC_REQUIREMENT[c])
-      .filter((doc): doc is "glossary" | "tone" => !!doc && !docStatusByRequirement[doc])
+      .filter((doc): doc is "tone" => !!doc && !docStatusByRequirement[doc])
   )];
 
   const hasText = sourceText.trim() && translationText.trim();
@@ -259,7 +256,7 @@ export default function CheckRunner({
         {sourceLang && allLangs === null && <p className="muted small">Загрузка списка языков…</p>}
         {sourceLang && allLangs !== null && targetCandidates.length === 0 && (
           <p className="muted small">
-            В документах проекта (Глоссарий/Нумералс/Тон) пока не найдено ни одного языка, кроме языка оригинала.
+            В документах проекта (Тон обращения) пока не найдено ни одного языка, кроме языка оригинала.
           </p>
         )}
         {sourceLang && mode === "file" && targetCandidates.length > 0 && (

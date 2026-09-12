@@ -1,6 +1,5 @@
 import type {
   Finding,
-  GlossaryStatus,
   Manager,
   MultiCheckHistoryEntry,
   MultiCheckResponse,
@@ -98,18 +97,7 @@ export function knownLanguages(projectId: number): Promise<{ languages: string[]
   return request(`/projects/${projectId}/known-languages`);
 }
 
-// --- reference documents (glossary / tone-of-address) ---
-
-export function getGlossaryStatus(projectId: number): Promise<GlossaryStatus> {
-  return request(`/projects/${projectId}/glossary/status`);
-}
-
-export function uploadGlossary(managerId: number, projectId: number, file: File): Promise<GlossaryStatus> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("manager_id", String(managerId));
-  return requestForm(`/projects/${projectId}/glossary/upload`, formData);
-}
+// --- reference documents (tone-of-address) ---
 
 export function getToneStatus(projectId: number): Promise<ToneStatus> {
   return request(`/projects/${projectId}/tone/status`);
