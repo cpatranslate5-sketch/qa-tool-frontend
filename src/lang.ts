@@ -29,7 +29,21 @@ export function flagForLang(code: string): string {
     const flag = regionFlag(parts[i]);
     if (flag) return flag;
   }
-  return BASE_LANG_FALLBACK[parts[0].toLowerCase()] || "🌐";
+  const base = parts[0].toLowerCase();
+  if (BASE_LANG_FALLBACK[base]) return BASE_LANG_FALLBACK[base];
+  // A bare code with no region part at all, and not one of the common
+  // languages above, is very likely one of the agency's country-code-style
+  // labels (the real Tone doc names Kazakh "KZ", Tajik "TJ", Bengali "BD" —
+  // the COUNTRY code, not the ISO language subtag). Since removing the
+  // Numerals document (which used to carry the real "kk-KZ"-style codes and
+  // let merge_lang_codes bridge "kz" into it) took away that bridging, a
+  // bare label like this now reaches here as-is — try it directly as a
+  // region code before giving up, since for these it already IS one.
+  if (parts.length === 1) {
+    const flag = regionFlag(base);
+    if (flag) return flag;
+  }
+  return "🌐";
 }
 
 export function langLabel(code: string): string {
