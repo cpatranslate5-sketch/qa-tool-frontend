@@ -4,7 +4,7 @@ import {
   knownLanguages, multiCheck, multiCheckDetail, multiCheckHistory, multiCheckReportUrl,
   runCheck, singleCheckHistory,
 } from "./api";
-import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL } from "./lang";
+import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import type {
   Finding, Manager, MultiCheckHistoryEntry, MultiCheckResponse,
   Project, SingleCheckHistoryEntry, ToneStatus,
@@ -338,7 +338,7 @@ export default function CheckRunner({
           {findings.map((f, i) => (
             <div key={i} className={`finding finding-${f.severity}`}>
               <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-              <span className="finding-type">{f.type}</span>
+              <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
               <div className="finding-message">{f.message}</div>
             </div>
           ))}
@@ -401,7 +401,7 @@ export default function CheckRunner({
                       {row.findings.map((f, fi) => (
                         <div key={fi} className={`finding finding-${f.severity}`}>
                           <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-                          <span className="finding-type">{f.type}</span>
+                          <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
                           <div className="finding-message">{f.message}</div>
                         </div>
                       ))}
@@ -433,7 +433,7 @@ export default function CheckRunner({
               {h.findings.map((f, i) => (
                 <div key={i} className={`finding finding-${f.severity}`}>
                   <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-                  <span className="finding-type">{f.type}</span>
+                  <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
                   <div className="finding-message">{f.message}</div>
                 </div>
               ))}

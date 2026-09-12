@@ -86,6 +86,15 @@ export function buildChecksToSend(selected: string[]): string[] {
 
 export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medium: "Средне", low: "Мелочь" };
 
+// Real check-type keys ("typo", "register", ...) are shown as-is — no
+// mapping needed, that's familiar to Александр already. The one exception
+// is "system": a synthetic finding the backend injects itself (not from
+// the model or a rule check) when something about the CHECK ITSELF went
+// wrong — the AI's response got cut off, or a batch request errored — so
+// it needs a label that reads as "something's off with the check", not as
+// a translation problem type.
+export const TYPE_LABEL: Record<string, string> = { system: "⚠ Внимание" };
+
 // Real AI cost of a check, in USD — displayed in ru-RU style ("0,0031 $")
 // per Александр's request. Costs are often tiny (a few tenths of a cent),
 // so a fixed 2-decimal format would round almost everything down to
