@@ -56,6 +56,12 @@ export default function CheckRunner({
   // --- optional comment ---
   const [comment, setComment] = useState("");
 
+  // "Срочно" — file mode only: forces the instant path (2x price) instead
+  // of Anthropic's cheaper but up-to-an-hour batch queue, for a big
+  // upload that can't wait — Александр asked for this after hitting the
+  // "проверяется в очереди" notice on an urgent file.
+  const [urgent, setUrgent] = useState(false);
+
   // --- doc status, for the missing-document warning ---
   const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
 
@@ -201,7 +207,7 @@ export default function CheckRunner({
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
-        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti);
+        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent);
         setMultiResult(res);
         setOpenLang(res.summary?.languages_checked[0] || null);
         multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
@@ -280,6 +286,14 @@ export default function CheckRunner({
               accept=".xlsx"
               onChange={e => onFileChosen(e.target.files?.[0])}
             />
+            <label className="check-chip" style={{ marginTop: 8 }}>
+              <input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} />
+              Срочно (дороже в 2 раза, без очереди)
+            </label>
+            <p className="muted small">
+              Обычно большой файл дешевле проверять через очередь Anthropic — до часа ожидания. Эта галочка
+              пропускает очередь и считает сразу, но по полной (в 2 раза дороже) цене.
+            </p>
           </div>
         )}
       </div>

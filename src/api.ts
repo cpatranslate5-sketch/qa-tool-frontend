@@ -167,7 +167,10 @@ export function multiCheck(
   managerId: number,
   checks: string[],
   extraInstructions: string,
-  targetLangs: string[]
+  targetLangs: string[],
+  // "Срочно" — forces the instant (2x price) path instead of Anthropic's
+  // cheaper but up-to-an-hour batch queue, for a large upload that can't wait.
+  urgent = false
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -177,6 +180,7 @@ export function multiCheck(
   formData.append("checks", checks.join(","));
   formData.append("extra_instructions", extraInstructions);
   formData.append("target_langs", targetLangs.join(","));
+  if (urgent) formData.append("urgent", "true");
   return requestForm(`/projects/${projectId}/multi-check`, formData);
 }
 
