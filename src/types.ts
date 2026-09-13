@@ -74,6 +74,11 @@ export interface MultiCheckResponse {
   // Real Anthropic API cost of this check's AI calls, in USD — only present
   // once status is "completed" (not known yet while "processing").
   cost_usd?: number;
+  // Only present while status is "processing" — Anthropic's own count of how
+  // many of the batch's per-language requests are done vs. the total, so
+  // the UI can show real progress instead of guessing a time estimate
+  // (Anthropic doesn't provide an ETA for a batch job).
+  progress?: { done: number; total: number } | null;
 }
 
 export interface MultiCheckHistoryEntry {

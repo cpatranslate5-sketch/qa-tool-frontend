@@ -406,7 +406,20 @@ export default function CheckRunner({
             Задача большая — для неё дешевле проверять через очередь Anthropic, а не мгновенно.
             Обычно это занимает до часа. {polling ? "Проверяю, не готово ли ещё…" : "Страница сама проверит готовность через некоторое время"}
             {" "}— можно закрыть вкладку и вернуться позже через «Историю» ниже.
+            {multiResult.progress && multiResult.progress.total > 0 && (
+              <>
+                {" "}Готово {multiResult.progress.done} из {multiResult.progress.total}.
+              </>
+            )}
           </div>
+          {multiResult.progress && multiResult.progress.total > 0 && (
+            <div className="progress-bar">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${Math.round((multiResult.progress.done / multiResult.progress.total) * 100)}%` }}
+              />
+            </div>
+          )}
         </div>
       )}
 
