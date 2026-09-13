@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import {
-  detectFileLanguages, getToneStatus,
+  deleteMultiCheck, detectFileLanguages, getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckHistory, multiCheckReportUrl,
   runCheck, singleCheckHistory,
 } from "./api";
@@ -231,6 +232,25 @@ export default function CheckRunner({
     }
   }
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  async function handleDeleteMultiCheck(e: MouseEvent, id: number) {
+    e.stopPropagation(); // don't also trigger the row's own "open" click
+    if (!window.confirm("Удалить эту проверку из истории? Отменить будет нельзя.")) return;
+    setDeletingId(id);
+    try {
+      await deleteMultiCheck(project.id, id, manager.id);
+      setMultiHistory(prev => prev.filter(h => h.id !== id));
+      if (multiResult?.multi_check_id === id) {
+        setMultiResult(null);
+      }
+    } catch {
+      setError("Не удалось удалить эту проверку.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const unrecognized = multiResult?.sheets?.flatMap(s => s.unrecognized_columns) || [];
 
   return (
@@ -433,7 +453,12 @@ export default function CheckRunner({
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
           )}
-          <a className="download-link" href={multiCheckReportUrl(project.id, multiResult.multi_check_id, manager.id)}>
+          <a
+            className="download-link"
+            href={multiCheckReportUrl(project.id, multiResult.multi_check_id, manager.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             ⬇ Скачать отчёт (Excel)
           </a>
 
@@ -514,17 +539,27 @@ export default function CheckRunner({
         <div className="history">
           <h2>История загрузок документов</h2>
           {multiHistory.map(h => (
-            <button
-              key={h.id}
-              className={`history-row ${h.status === "processing" ? "history-row-processing" : ""}`}
-              onClick={() => openMultiHistoryEntry(h.id)}
-            >
-              {new Date(h.created_at).toLocaleString("ru-RU")}
-              {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
-              {" — "}{h.filename}
-              {" — "}
-              {h.status === "processing" ? "ещё обрабатывается…" : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
-            </button>
+            <div key={h.id} className="history-row-wrap">
+              <button
+                className={`history-row ${h.status === "processing" ? "history-row-processing" : ""}`}
+                onClick={() => openMultiHistoryEntry(h.id)}
+              >
+                {new Date(h.created_at).toLocaleString("ru-RU")}
+                {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
+                {" — "}{h.filename}
+                {" — "}
+                {h.status === "processing" ? "ещё обрабатывается…" : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
+              </button>
+              <button
+                type="button"
+                className="history-delete-button"
+                title="Удалить эту проверку"
+                disabled={deletingId === h.id}
+                onClick={e => handleDeleteMultiCheck(e, h.id)}
+              >
+                ✕
+              </button>
+            </div>
           ))}
         </div>
       )}

@@ -338,3 +338,22 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .history-row:hover { border-color: var(--accent); }
 .history-row-processing { border-color: var(--warning); color: var(--warning); }
+.history-row-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.history-row-wrap .history-row { margin-bottom: 0; }
+.history-delete-button {
+  flex: 0 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.history-delete-button:hover { border-color: var(--danger); color: var(--danger); }
+.history-delete-button:disabled { opacity: 0.5; cursor: default; }

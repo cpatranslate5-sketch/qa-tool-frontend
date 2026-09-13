@@ -195,3 +195,10 @@ export function multiCheckDetail(projectId: number, multiCheckId: number, manage
 export function multiCheckReportUrl(projectId: number, multiCheckId: number, managerId: number): string {
   return `${API_URL}/projects/${projectId}/multi-check/${multiCheckId}/report.xlsx?manager_id=${managerId}`;
 }
+
+// Deletes one uploaded-document check from this manager's own history —
+// scoped server-side exactly like every other multi-check lookup, so this
+// can only ever affect the requesting manager's own uploads.
+export function deleteMultiCheck(projectId: number, multiCheckId: number, managerId: number): Promise<void> {
+  return request(`/projects/${projectId}/multi-check/${multiCheckId}?manager_id=${managerId}`, { method: "DELETE" });
+}
