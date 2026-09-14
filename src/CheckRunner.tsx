@@ -6,6 +6,7 @@ import {
 } from "./api";
 import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
+import { openReportInNewTab } from "./reportHtml";
 import type {
   Finding, Manager, MultiCheckResponse,
   Project, ToneStatus,
@@ -75,7 +76,6 @@ export default function CheckRunner({
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [singleCost, setSingleCost] = useState(0);
   const [multiResult, setMultiResult] = useState<MultiCheckResponse | null>(null);
-  const [openLang, setOpenLang] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
   // Bumped whenever the matching history list below should re-fetch (a
@@ -112,7 +112,6 @@ export default function CheckRunner({
         if (cancelled) return;
         if (res.status === "completed") {
           setMultiResult(res);
-          setOpenLang(res.summary?.languages_checked[0] || null);
           setMultiHistorySignal(s => s + 1);
         }
       } catch {
@@ -218,7 +217,6 @@ export default function CheckRunner({
         if (!file) return;
         const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent);
         setMultiResult(res);
-        setOpenLang(res.summary?.languages_checked[0] || null);
         setMultiHistorySignal(s => s + 1);
       }
     } catch (err) {
@@ -234,7 +232,6 @@ export default function CheckRunner({
       const res = await multiCheckDetail(project.id, id, manager.id);
       setMultiResult(res);
       setFindings(null);
-      setOpenLang(res.summary?.languages_checked[0] || null);
     } catch {
       setError("Не удалось загрузить эту проверку.");
     }
@@ -459,47 +456,48 @@ export default function CheckRunner({
           >
             ⬇ Скачать отчёт (Excel)
           </a>
+          <button
+            type="button"
+            className="download-link"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginLeft: 20 }}
+            onClick={() => openReportInNewTab(() => Promise.resolve(multiResult))}
+          >
+            ⧉ Открыть в новой вкладке
+          </button>
 
           {multiResult.sheets.map(sheet => (
             <div key={sheet.sheet_name} className="sheet-block">
               {multiResult.sheets!.length > 1 && <h3>{sheet.sheet_name}</h3>}
-              <div className="lang-tabs">
-                {sheet.languages_checked.map(lang => {
-                  const count = sheet.languages[lang]?.length || 0;
-                  return (
-                    <button
-                      key={lang}
-                      type="button"
-                      className={`lang-tab ${openLang === lang ? "active" : ""} ${count > 0 ? "has-findings" : ""}`}
-                      onClick={() => setOpenLang(lang)}
-                    >
-                      {flagForLang(lang)} {lang} {count > 0 ? `(${count})` : ""}
-                    </button>
-                  );
-                })}
-              </div>
 
-              {openLang && sheet.languages[openLang] && (
-                <div className="lang-results">
-                  {sheet.languages[openLang].length === 0 && <div className="muted">Проблем не найдено.</div>}
-                  {sheet.languages[openLang].map((row, i) => (
-                    <div key={i} className="multi-row">
-                      <div className="multi-row-header">Строка {row.excel_row} — {row.context || "без контекста"}</div>
-                      <div className="history-pair">
-                        <div><strong>Источник:</strong> {row.source}</div>
-                        <div><strong>Перевод:</strong> {row.translation}</div>
-                      </div>
-                      {row.findings.map((f, fi) => (
-                        <div key={fi} className={`finding finding-${f.severity}`}>
-                          <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-                          <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
-                          <div className="finding-message">{f.message}</div>
+              {sheet.languages_checked.map(lang => {
+                const rows = sheet.languages[lang] || [];
+                return (
+                  <div key={lang} className="lang-block">
+                    <h4 className={`lang-block-title ${rows.length > 0 ? "has-findings" : ""}`}>
+                      {flagForLang(lang)} {lang} — {rows.length > 0 ? `${rows.length} найдено` : "без проблем"}
+                    </h4>
+                    <div className="lang-results">
+                      {rows.length === 0 && <div className="muted">Проблем не найдено.</div>}
+                      {rows.map((row, i) => (
+                        <div key={i} className="multi-row">
+                          <div className="multi-row-header">Строка {row.excel_row} — {row.context || "без контекста"}</div>
+                          <div className="history-pair">
+                            <div><strong>Источник:</strong> {row.source}</div>
+                            <div><strong>Перевод:</strong> {row.translation}</div>
+                          </div>
+                          {row.findings.map((f, fi) => (
+                            <div key={fi} className={`finding finding-${f.severity}`}>
+                              <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
+                              <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
+                              <div className="finding-message">{f.message}</div>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

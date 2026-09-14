@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
-import { deleteMultiCheck, deleteSingleCheck, multiCheckHistory, singleCheckHistory } from "./api";
+import { deleteMultiCheck, deleteSingleCheck, multiCheckDetail, multiCheckHistory, singleCheckHistory } from "./api";
 import { flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { openReportInNewTab } from "./reportHtml";
 import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
 
 // Both lists below are self-contained: they fetch their own data (scoped to
@@ -117,10 +118,12 @@ export function MultiCheckHistoryList({
   manager: Manager;
   project: Project;
   refreshSignal?: number;
-  // Opening an entry means showing its full findings — that whole detail
-  // view lives on the check-runner screen, so this just tells the parent
-  // which check id to open there (CheckRunner shows it inline; ProjectView
-  // navigates to the check screen with it).
+  // A completed entry opens its report on its own page (see handleOpen
+  // below) without ever calling this. This is only reached for a
+  // still-processing entry (or if the report tab genuinely couldn't be
+  // opened) — it tells the parent which check id to open on the check-runner
+  // screen instead (CheckRunner shows it inline; ProjectView navigates to
+  // the check screen with it), so its progress bar is still reachable.
   onOpen: (id: number) => void;
   // Called after a successful delete — lets CheckRunner clear its own
   // results panel if the deleted entry is the one currently shown there.
@@ -169,6 +172,23 @@ export function MultiCheckHistoryList({
     }
   }
 
+  // A finished report opens on its own page (Александр's ask: reports
+  // shouldn't replace whatever's on the current check screen) — the tab is
+  // opened synchronously so it isn't blocked as a popup, then filled in once
+  // the detail fetch resolves. A still-processing entry has no report to
+  // show yet, so that case keeps the old behavior (opens inline / navigates
+  // to the check screen, wherever this list lives) so its progress bar is
+  // still reachable. If the tab genuinely couldn't be opened (a strict
+  // popup blocker), fall back to that same inline behavior too.
+  async function handleOpen(h: MultiCheckHistoryEntry) {
+    if (h.status !== "completed") {
+      onOpen(h.id);
+      return;
+    }
+    const opened = await openReportInNewTab(() => multiCheckDetail(project.id, h.id, manager.id));
+    if (!opened) onOpen(h.id);
+  }
+
   if (history.length === 0) return null;
 
   return (
@@ -182,7 +202,7 @@ export function MultiCheckHistoryList({
         <div key={h.id} className="history-row-wrap">
           <button
             className={`history-row ${h.status === "processing" ? "history-row-processing" : ""}`}
-            onClick={() => onOpen(h.id)}
+            onClick={() => handleOpen(h)}
           >
             {new Date(h.created_at).toLocaleString("ru-RU")}
             {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}

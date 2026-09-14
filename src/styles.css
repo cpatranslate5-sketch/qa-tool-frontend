@@ -278,18 +278,20 @@ button:disabled { opacity: 0.5; cursor: default; }
 .multi-upload-form button { margin-top: 16px; }
 
 .sheet-block { margin-top: 18px; }
-.lang-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
-.lang-tab {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 500;
+
+/* Александр asked for the per-language tab-click view to be replaced with
+   every language's findings shown at once, sequentially, right below the
+   overall summary — no extra click needed to see what's in each language. */
+.lang-block { margin-top: 16px; }
+.lang-block-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--fg);
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
 }
-.lang-tab.has-findings { color: var(--warning); border-color: var(--warning); }
-.lang-tab.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.lang-block-title.has-findings { color: var(--warning); }
 
 .lang-results { display: flex; flex-direction: column; gap: 12px; }
 .multi-row {
