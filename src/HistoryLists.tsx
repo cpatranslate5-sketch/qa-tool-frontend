@@ -222,8 +222,15 @@ export function MultiCheckHistoryList({
                   ? `обрабатывается — ${Math.round((h.progress.done / h.progress.total) * 100)}%`
                   // Anthropic's own counts haven't moved yet — show real
                   // elapsed waiting time instead of a static "0%"/"ещё
-                  // обрабатывается…" that never seems to change.
-                  : `в очереди — ${formatElapsedMinutesRu(Math.max(0, Math.floor((Date.now() - Date.parse(h.created_at)) / 60000)))}`)
+                  // обрабатывается…" that never seems to change. Says
+                  // "прошло" (elapsed), not "осталось" (remaining) —
+                  // Александр read an earlier, vaguer wording as a
+                  // countdown to completion, which it never was (Anthropic
+                  // doesn't give us that number at all). Appends a rough,
+                  // learned-from-history ETA when one's available, so the
+                  // elapsed number has something to compare against.
+                  : `обрабатывается — прошло ${formatElapsedMinutesRu(Math.max(0, Math.floor((Date.now() - Date.parse(h.created_at)) / 60000)))}`
+                    + (h.estimated_minutes ? ` (обычно ~${h.estimated_minutes} мин)` : ""))
               : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
           </button>
           <button

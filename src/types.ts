@@ -83,6 +83,10 @@ export interface MultiCheckResponse {
   // above haven't moved yet, the UI falls back to showing elapsed waiting
   // time (computed from this) instead of a static "0%".
   created_at?: string;
+  // Only meaningful while status is "processing" — a rough, non-binding ETA
+  // in minutes, learned from how long similarly-sized past batch jobs
+  // actually took. null/absent until there's history to learn from.
+  estimated_minutes?: number | null;
 }
 
 export interface MultiCheckHistoryEntry {
@@ -102,4 +106,7 @@ export interface MultiCheckHistoryEntry {
   // from Anthropic, refreshed each time the history list is loaded (see
   // MultiCheckResponse.progress for the same shape on the detail screen).
   progress?: { done: number; total: number } | null;
+  // Same rough, non-binding ETA as MultiCheckResponse.estimated_minutes,
+  // only meaningful while status is "processing".
+  estimated_minutes?: number | null;
 }

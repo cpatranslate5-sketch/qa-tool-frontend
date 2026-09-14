@@ -468,15 +468,26 @@ export default function CheckRunner({
       {multiResult && multiResult.status === "processing" && (
         <div className="results">
           <div className="info-box">
-            Задача большая — проверка началась, но займёт некоторое время. Можно закрыть вкладку и
-            вернуться позже через «Историю» ниже.
+            Задача большая — обрабатывается через очередь Anthropic. Anthropic не сообщает точное время
+            окончания, поэтому ниже — сколько уже <strong>прошло</strong> с начала ожидания, а не сколько
+            осталось.
+            {multiResult.estimated_minutes ? (
+              <>
+                {" "}По похожим прошлым проверкам такое обычно занимает около{" "}
+                {formatElapsedMinutesRu(multiResult.estimated_minutes)} — это не гарантия, скорость у
+                Anthropic каждый раз может быть разной (иногда быстрее, иногда медленнее, до часа).
+              </>
+            ) : (
+              " Обычно это занимает до часа."
+            )}
+            {" "}Можно закрыть вкладку и вернуться позже через «Историю» ниже.
             {multiResult.progress && multiResult.progress.total > 0 && multiResult.progress.done > 0 ? (
               <>
                 {" "}Готово {multiResult.progress.done} из {multiResult.progress.total}.
               </>
             ) : multiResult.created_at ? (
               <>
-                {" "}В очереди уже {formatElapsedMinutesRu(elapsedMinutes)}.
+                {" "}Прошло уже {formatElapsedMinutesRu(elapsedMinutes)}.
               </>
             ) : null}
             {polling && " Проверяю, не готово ли ещё…"}
