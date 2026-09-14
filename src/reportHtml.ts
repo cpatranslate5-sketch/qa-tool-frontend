@@ -5,7 +5,7 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { flagForLang, formatCostRu, formatDurationRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import type { MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
@@ -110,7 +110,7 @@ export function buildReportHtml(result: MultiCheckResponse): string {
 <body>
   <div class="page">
     <h1>${esc(titleText)}</h1>
-    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}</p>` : ""}
+    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}</p>` : ""}
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
     ${sheetsHtml}
   </div>

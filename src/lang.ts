@@ -116,6 +116,19 @@ export function formatElapsedMinutesRu(minutes: number): string {
   return `${minutes} ${pluralRu(minutes, "минута", "минуты", "минут")}`;
 }
 
+// How long a COMPLETED check actually took, from created_at to completed_at
+// — distinct from formatElapsedMinutesRu above, which is for a check still
+// in progress. Rounds to the nearest minute (a finished duration reads more
+// naturally rounded than floored). Returns null when either timestamp is
+// missing (an older record from before this was tracked), so callers can
+// simply omit the line rather than showing a misleading duration.
+export function formatDurationRu(createdAt?: string | null, completedAt?: string | null): string | null {
+  if (!createdAt || !completedAt) return null;
+  const ms = Date.parse(completedAt) - Date.parse(createdAt);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return formatElapsedMinutesRu(Math.round(ms / 60000));
+}
+
 // Real AI cost of a check, in USD — displayed in ru-RU style ("0,0031 $")
 // per Александр's request. Costs are often tiny (a few tenths of a cent),
 // so a fixed 2-decimal format would round almost everything down to

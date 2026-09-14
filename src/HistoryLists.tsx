@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { deleteMultiCheck, deleteSingleCheck, multiCheckDetail, multiCheckHistory, singleCheckHistory } from "./api";
-import { flagForLang, formatCostRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { openReportInNewTab } from "./reportHtml";
 import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
 
@@ -231,7 +231,8 @@ export function MultiCheckHistoryList({
                   // elapsed number has something to compare against.
                   : `обрабатывается — прошло ${formatElapsedMinutesRu(Math.max(0, Math.floor((Date.now() - Date.parse(h.created_at)) / 60000)))}`
                     + (h.estimated_minutes ? ` (обычно ~${h.estimated_minutes} мин)` : ""))
-              : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
+              : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`
+                + (formatDurationRu(h.created_at, h.completed_at) ? ` — заняла ${formatDurationRu(h.created_at, h.completed_at)}` : "")}
           </button>
           <button
             type="button"

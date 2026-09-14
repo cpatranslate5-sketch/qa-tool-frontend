@@ -87,6 +87,9 @@ export interface MultiCheckResponse {
   // in minutes, learned from how long similarly-sized past batch jobs
   // actually took. null/absent until there's history to learn from.
   estimated_minutes?: number | null;
+  // Only present once status is "completed" — together with created_at,
+  // lets the UI show how long the check actually took.
+  completed_at?: string | null;
 }
 
 export interface MultiCheckHistoryEntry {
@@ -109,4 +112,7 @@ export interface MultiCheckHistoryEntry {
   // Same rough, non-binding ETA as MultiCheckResponse.estimated_minutes,
   // only meaningful while status is "processing".
   estimated_minutes?: number | null;
+  // Only present once status is "completed" — together with created_at,
+  // lets the history row show how long the check actually took.
+  completed_at?: string | null;
 }

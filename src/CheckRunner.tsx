@@ -4,7 +4,7 @@ import {
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck,
 } from "./api";
-import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import type {
@@ -518,6 +518,9 @@ export default function CheckRunner({
           <p className="muted small">
             Исходный язык: {multiResult.source_lang}. Строк проверено: {multiResult.summary.rows_checked}.
             {" "}Проверка завершена, стоимость составила: {formatCostRu(multiResult.cost_usd || 0)}.
+            {formatDurationRu(multiResult.created_at, multiResult.completed_at) && (
+              <> Заняла: {formatDurationRu(multiResult.created_at, multiResult.completed_at)}.</>
+            )}
           </p>
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
