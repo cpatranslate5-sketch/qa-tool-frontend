@@ -4,7 +4,7 @@ import {
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck,
 } from "./api";
-import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import type {
@@ -100,7 +100,14 @@ export default function CheckRunner({
   }, [sourceLang]);
 
   // large multi-checks go to Anthropic's cheaper batch queue and come back
-  // "processing" — keep quietly re-checking until it flips to "completed"
+  // "processing" — keep quietly re-checking until it flips to "completed".
+  // Every tick's fresh progress is applied to the screen even while still
+  // processing (not just on the final "completed" tick) — previously this
+  // only called setMultiResult once the whole batch finished, so the done/
+  // total count (and the percentage shown from it) stayed frozen at
+  // whatever it was on the very first render the entire time, even once
+  // Anthropic had genuinely moved forward — that's what made it look stuck
+  // at 0%.
   useEffect(() => {
     if (!multiResult || multiResult.status !== "processing") return;
     const id = multiResult.multi_check_id;
@@ -110,8 +117,8 @@ export default function CheckRunner({
       try {
         const res = await multiCheckDetail(project.id, id, manager.id);
         if (cancelled) return;
+        setMultiResult(res);
         if (res.status === "completed") {
-          setMultiResult(res);
           setMultiHistorySignal(s => s + 1);
         }
       } catch {
@@ -125,6 +132,22 @@ export default function CheckRunner({
       clearInterval(timer);
     };
   }, [multiResult, project.id, manager.id]);
+
+  // A plain re-render clock, ticking every 30s, purely so the elapsed-time
+  // fallback below (shown while Anthropic's own done/total hasn't moved
+  // yet) visibly counts up on its own instead of only changing whenever a
+  // real progress update happens to land. Deliberately keyed on just the
+  // status (not the whole multiResult object, which gets a new reference
+  // on every 20s poll above) — depending on the full object would tear
+  // down and reschedule this 30s timer on every poll tick, and since polls
+  // land more often than 30s, the timer would keep getting cancelled
+  // before it ever fires.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (multiResult?.status !== "processing") return;
+    const timer = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, [multiResult?.status]);
 
   // In file mode, once a file has been picked, its OWN languages are the
   // source of truth for what can be checked — falls back to the project's
@@ -247,6 +270,9 @@ export default function CheckRunner({
   }, [openMultiCheckId]);
 
   const unrecognized = multiResult?.sheets?.flatMap(s => s.unrecognized_columns) || [];
+  const elapsedMinutes = multiResult?.created_at
+    ? Math.max(0, Math.floor((nowTick - Date.parse(multiResult.created_at)) / 60000))
+    : 0;
 
   return (
     <div className="page">
@@ -420,11 +446,15 @@ export default function CheckRunner({
           <div className="info-box">
             Задача большая — проверка началась, но займёт некоторое время. Можно закрыть вкладку и
             вернуться позже через «Историю» ниже.
-            {multiResult.progress && multiResult.progress.total > 0 && (
+            {multiResult.progress && multiResult.progress.total > 0 && multiResult.progress.done > 0 ? (
               <>
                 {" "}Готово {multiResult.progress.done} из {multiResult.progress.total}.
               </>
-            )}
+            ) : multiResult.created_at ? (
+              <>
+                {" "}В очереди уже {formatElapsedMinutesRu(elapsedMinutes)}.
+              </>
+            ) : null}
             {polling && " Проверяю, не готово ли ещё…"}
           </div>
           {multiResult.progress && multiResult.progress.total > 0 && (

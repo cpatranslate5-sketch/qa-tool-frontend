@@ -79,6 +79,10 @@ export interface MultiCheckResponse {
   // the UI can show real progress instead of guessing a time estimate
   // (Anthropic doesn't provide an ETA for a batch job).
   progress?: { done: number; total: number } | null;
+  // Only present while status is "processing" — when Anthropic's own counts
+  // above haven't moved yet, the UI falls back to showing elapsed waiting
+  // time (computed from this) instead of a static "0%".
+  created_at?: string;
 }
 
 export interface MultiCheckHistoryEntry {

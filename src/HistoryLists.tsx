@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { deleteMultiCheck, deleteSingleCheck, multiCheckDetail, multiCheckHistory, singleCheckHistory } from "./api";
-import { flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { flagForLang, formatCostRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { openReportInNewTab } from "./reportHtml";
 import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
 
@@ -209,9 +209,12 @@ export function MultiCheckHistoryList({
             {" — "}{h.filename}
             {" — "}
             {h.status === "processing"
-              ? (h.progress && h.progress.total > 0
+              ? (h.progress && h.progress.total > 0 && h.progress.done > 0
                   ? `обрабатывается — ${Math.round((h.progress.done / h.progress.total) * 100)}%`
-                  : "ещё обрабатывается…")
+                  // Anthropic's own counts haven't moved yet — show real
+                  // elapsed waiting time instead of a static "0%"/"ещё
+                  // обрабатывается…" that never seems to change.
+                  : `в очереди — ${formatElapsedMinutesRu(Math.max(0, Math.floor((Date.now() - Date.parse(h.created_at)) / 60000)))}`)
               : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
           </button>
           <button

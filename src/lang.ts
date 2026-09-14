@@ -95,6 +95,27 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 // a translation problem type.
 export const TYPE_LABEL: Record<string, string> = { system: "⚠ Внимание" };
 
+// Standard Russian count-noun pluralization (1 минута, 2 минуты, 5 минут,
+// 11 минут, 21 минута, ...) — used by formatElapsedMinutesRu below.
+function pluralRu(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
+
+// How long a batch job has genuinely been waiting — shown as a fallback
+// while Anthropic's own done/total counts haven't moved yet, so the
+// "processing" screen still visibly changes over time instead of sitting
+// on a static "0%" (Александр's complaint). This is real, measured elapsed
+// time, not a guessed ETA.
+export function formatElapsedMinutesRu(minutes: number): string {
+  if (minutes < 1) return "меньше минуты";
+  return `${minutes} ${pluralRu(minutes, "минута", "минуты", "минут")}`;
+}
+
 // Real AI cost of a check, in USD — displayed in ru-RU style ("0,0031 $")
 // per Александр's request. Costs are often tiny (a few tenths of a cent),
 // so a fixed 2-decimal format would round almost everything down to
