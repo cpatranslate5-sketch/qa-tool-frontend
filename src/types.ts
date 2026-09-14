@@ -94,4 +94,8 @@ export interface MultiCheckHistoryEntry {
   // 0 while status is "processing" — real cost isn't known until the batch
   // finishes.
   cost_usd: number;
+  // Only present while status is "processing" — real done/total counts
+  // from Anthropic, refreshed each time the history list is loaded (see
+  // MultiCheckResponse.progress for the same shape on the detail screen).
+  progress?: { done: number; total: number } | null;
 }

@@ -423,14 +423,14 @@ export default function CheckRunner({
       {multiResult && multiResult.status === "processing" && (
         <div className="results">
           <div className="info-box">
-            Задача большая — для неё дешевле проверять через очередь Anthropic, а не мгновенно.
-            Обычно это занимает до часа. {polling ? "Проверяю, не готово ли ещё…" : "Страница сама проверит готовность через некоторое время"}
-            {" "}— можно закрыть вкладку и вернуться позже через «Историю» ниже.
+            Задача большая — проверка началась, но займёт некоторое время. Можно закрыть вкладку и
+            вернуться позже через «Историю» ниже.
             {multiResult.progress && multiResult.progress.total > 0 && (
               <>
                 {" "}Готово {multiResult.progress.done} из {multiResult.progress.total}.
               </>
             )}
+            {polling && " Проверяю, не готово ли ещё…"}
           </div>
           {multiResult.progress && multiResult.progress.total > 0 && (
             <div className="progress-bar">
@@ -548,7 +548,11 @@ export default function CheckRunner({
                 {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
                 {" — "}{h.filename}
                 {" — "}
-                {h.status === "processing" ? "ещё обрабатывается…" : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
+                {h.status === "processing"
+                  ? (h.progress && h.progress.total > 0
+                      ? `обрабатывается — ${Math.round((h.progress.done / h.progress.total) * 100)}%`
+                      : "ещё обрабатывается…")
+                  : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
               </button>
               <button
                 type="button"
