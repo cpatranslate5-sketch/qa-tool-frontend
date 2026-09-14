@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import type { MouseEvent } from "react";
 import {
-  deleteMultiCheck, detectFileLanguages, getToneStatus,
-  knownLanguages, multiCheck, multiCheckDetail, multiCheckHistory, multiCheckReportUrl,
-  runCheck, singleCheckHistory,
+  detectFileLanguages, getToneStatus,
+  knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
+  runCheck,
 } from "./api";
 import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import type {
-  Finding, Manager, MultiCheckHistoryEntry, MultiCheckResponse,
-  Project, SingleCheckHistoryEntry, ToneStatus,
+  Finding, Manager, MultiCheckResponse,
+  Project, ToneStatus,
 } from "./types";
 
 const SOURCE_LANGS = [
@@ -24,10 +24,14 @@ export default function CheckRunner({
   manager,
   project,
   onBack,
+  openMultiCheckId,
 }: {
   manager: Manager;
   project: Project;
   onBack: () => void;
+  // Set when navigating here from a history entry clicked on the project
+  // page (see ProjectView) — that specific upload's results open right away.
+  openMultiCheckId?: number;
 }) {
   // --- step 1: source language ---
   const [sourceLang, setSourceLang] = useState("");
@@ -74,14 +78,18 @@ export default function CheckRunner({
   const [openLang, setOpenLang] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
-  const [singleHistory, setSingleHistory] = useState<SingleCheckHistoryEntry[]>([]);
-  const [multiHistory, setMultiHistory] = useState<MultiCheckHistoryEntry[]>([]);
+  // Bumped whenever the matching history list below should re-fetch (a
+  // check just ran, or a batch just finished polling) — kept separate so
+  // finishing a single-text check doesn't also cause a pointless refetch
+  // of the (unrelated) upload history, and vice versa. The lists are
+  // self-contained (see HistoryLists.tsx); this is the only hook
+  // CheckRunner needs into them.
+  const [singleHistorySignal, setSingleHistorySignal] = useState(0);
+  const [multiHistorySignal, setMultiHistorySignal] = useState(0);
 
   useEffect(() => {
     knownLanguages(project.id).then(r => setAllLangs(r.languages)).catch(() => setAllLangs([]));
     getToneStatus(project.id).then(setToneStatus).catch(() => {});
-    singleCheckHistory(project.id, manager.id).then(setSingleHistory).catch(() => {});
-    multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
   }, [project.id, manager.id]);
 
   // reset target-language choices whenever the source language changes, since
@@ -105,7 +113,7 @@ export default function CheckRunner({
         if (res.status === "completed") {
           setMultiResult(res);
           setOpenLang(res.summary?.languages_checked[0] || null);
-          multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
+          setMultiHistorySignal(s => s + 1);
         }
       } catch {
         /* transient — just try again next tick */
@@ -204,14 +212,14 @@ export default function CheckRunner({
         });
         setFindings(res.findings);
         setSingleCost(res.cost_usd);
-        singleCheckHistory(project.id, manager.id).then(setSingleHistory).catch(() => {});
+        setSingleHistorySignal(s => s + 1);
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
         const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent);
         setMultiResult(res);
         setOpenLang(res.summary?.languages_checked[0] || null);
-        multiCheckHistory(project.id, manager.id).then(setMultiHistory).catch(() => {});
+        setMultiHistorySignal(s => s + 1);
       }
     } catch (err) {
       setError(err instanceof Error ? `Не удалось выполнить проверку: ${err.message}` : "Не удалось выполнить проверку.");
@@ -232,24 +240,14 @@ export default function CheckRunner({
     }
   }
 
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  async function handleDeleteMultiCheck(e: MouseEvent, id: number) {
-    e.stopPropagation(); // don't also trigger the row's own "open" click
-    if (!window.confirm("Удалить эту проверку из истории? Отменить будет нельзя.")) return;
-    setDeletingId(id);
-    try {
-      await deleteMultiCheck(project.id, id, manager.id);
-      setMultiHistory(prev => prev.filter(h => h.id !== id));
-      if (multiResult?.multi_check_id === id) {
-        setMultiResult(null);
-      }
-    } catch {
-      setError("Не удалось удалить эту проверку.");
-    } finally {
-      setDeletingId(null);
+  // Deep-link from ProjectView's own history list: open this specific
+  // upload's results as soon as we land on the check screen.
+  useEffect(() => {
+    if (openMultiCheckId != null) {
+      openMultiHistoryEntry(openMultiCheckId);
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openMultiCheckId]);
 
   const unrecognized = multiResult?.sheets?.flatMap(s => s.unrecognized_columns) || [];
 
@@ -507,66 +505,17 @@ export default function CheckRunner({
         </div>
       )}
 
-      {singleHistory.length > 0 && (
-        <div className="history">
-          <h2>История точечных проверок</h2>
-          {singleHistory.map(h => (
-            <details key={h.id} className="history-entry">
-              <summary>
-                {new Date(h.created_at).toLocaleString("ru-RU")}
-                {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
-                {" — "}{flagForLang(h.source_lang)}→{flagForLang(h.target_lang)} {h.target_lang}
-                {" — "}{h.findings.length === 0 ? "без проблем" : `${h.findings.length} найдено`}
-                {" — "}{formatCostRu(h.cost_usd)}
-              </summary>
-              <div className="history-pair">
-                <div><strong>Источник:</strong> {h.source}</div>
-                <div><strong>Перевод:</strong> {h.translation}</div>
-              </div>
-              {h.findings.map((f, i) => (
-                <div key={i} className={`finding finding-${f.severity}`}>
-                  <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-                  <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
-                  <div className="finding-message">{f.message}</div>
-                </div>
-              ))}
-            </details>
-          ))}
-        </div>
-      )}
-
-      {multiHistory.length > 0 && (
-        <div className="history">
-          <h2>История загрузок документов</h2>
-          {multiHistory.map(h => (
-            <div key={h.id} className="history-row-wrap">
-              <button
-                className={`history-row ${h.status === "processing" ? "history-row-processing" : ""}`}
-                onClick={() => openMultiHistoryEntry(h.id)}
-              >
-                {new Date(h.created_at).toLocaleString("ru-RU")}
-                {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
-                {" — "}{h.filename}
-                {" — "}
-                {h.status === "processing"
-                  ? (h.progress && h.progress.total > 0
-                      ? `обрабатывается — ${Math.round((h.progress.done / h.progress.total) * 100)}%`
-                      : "ещё обрабатывается…")
-                  : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
-              </button>
-              <button
-                type="button"
-                className="history-delete-button"
-                title="Удалить эту проверку"
-                disabled={deletingId === h.id}
-                onClick={e => handleDeleteMultiCheck(e, h.id)}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <SingleCheckHistoryList manager={manager} project={project} refreshSignal={singleHistorySignal} />
+      <MultiCheckHistoryList
+        manager={manager}
+        project={project}
+        refreshSignal={multiHistorySignal}
+        onOpen={openMultiHistoryEntry}
+        onDeleted={id => {
+          if (multiResult?.multi_check_id === id) setMultiResult(null);
+        }}
+        autoPoll={false}
+      />
     </div>
   );
 }

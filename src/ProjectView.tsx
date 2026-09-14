@@ -4,6 +4,7 @@ import {
   getToneStatus,
   uploadTone,
 } from "./api";
+import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import type { Manager, Project, ToneStatus } from "./types";
 
 type DocKind = "tone";
@@ -86,7 +87,10 @@ export default function ProjectView({
 }: {
   manager: Manager;
   project: Project;
-  onOpenCheck: () => void;
+  // Called with no argument for "start a new check"; called with a
+  // multi-check id when a history entry below was clicked, so the check
+  // screen opens straight to that upload's results.
+  onOpenCheck: (multiCheckId?: number) => void;
   onProjectDeleted: () => void;
   onBack: () => void;
 }) {
@@ -139,8 +143,11 @@ export default function ProjectView({
       </section>
 
       <section>
-        <button className="start-check-button" onClick={onOpenCheck}>Начать проверку →</button>
+        <button className="start-check-button" onClick={() => onOpenCheck()}>Начать проверку →</button>
       </section>
+
+      <SingleCheckHistoryList manager={manager} project={project} />
+      <MultiCheckHistoryList manager={manager} project={project} onOpen={onOpenCheck} />
 
       {manager.is_admin && (
         <section>

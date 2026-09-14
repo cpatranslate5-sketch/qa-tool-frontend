@@ -157,6 +157,10 @@ export function singleCheckHistory(projectId: number, managerId: number): Promis
   return request(`/projects/${projectId}/history?manager_id=${managerId}`);
 }
 
+export function deleteSingleCheck(projectId: number, singleCheckId: number, managerId: number): Promise<void> {
+  return request(`/projects/${projectId}/history/${singleCheckId}?manager_id=${managerId}`, { method: "DELETE" });
+}
+
 // --- checking: an uploaded document (one or more target languages) ---
 
 export function multiCheck(

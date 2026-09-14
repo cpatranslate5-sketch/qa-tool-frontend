@@ -313,16 +313,26 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 /* --- history --- */
 .history { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 14px; }
-.history-entry {
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.history-header h2 { margin-bottom: 0; }
+.collapse-toggle { color: var(--muted); font-size: 0.82rem; font-weight: 500; }
+.history-entry-wrap { margin-bottom: 6px; }
+.history-entry-detail {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
   padding: 8px 12px;
-  margin-bottom: 8px;
+  margin-top: -6px;
+  margin-bottom: 6px;
   font-size: 0.82rem;
 }
-.history-entry summary { cursor: pointer; color: var(--muted-2); }
-.history-entry .history-pair { margin-top: 8px; }
 .history-row {
   display: block;
   width: 100%;

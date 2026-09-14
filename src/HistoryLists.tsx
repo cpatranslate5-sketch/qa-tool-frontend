@@ -1,0 +1,210 @@
+import { useEffect, useState } from "react";
+import type { MouseEvent } from "react";
+import { deleteMultiCheck, deleteSingleCheck, multiCheckHistory, singleCheckHistory } from "./api";
+import { flagForLang, formatCostRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
+
+// Both lists below are self-contained: they fetch their own data (scoped to
+// this manager's own history in this project, same as the backend has
+// always enforced) and manage their own collapse/delete state, so they can
+// be dropped into both CheckRunner (right after running a check) and
+// ProjectView (as soon as you open a project folder) without the parent
+// screen needing to know anything about history. `refreshSignal` — bump it
+// (any changing number) to make either list re-fetch, e.g. right after a
+// new check finishes running.
+
+export function SingleCheckHistoryList({
+  manager,
+  project,
+  refreshSignal,
+}: {
+  manager: Manager;
+  project: Project;
+  refreshSignal?: number;
+}) {
+  const [history, setHistory] = useState<SingleCheckHistoryEntry[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    singleCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
+  }, [project.id, manager.id, refreshSignal]);
+
+  async function handleDelete(e: MouseEvent, id: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm("Удалить эту проверку из истории? Отменить будет нельзя.")) return;
+    setDeletingId(id);
+    setError("");
+    try {
+      await deleteSingleCheck(project.id, id, manager.id);
+      setHistory(prev => prev.filter(h => h.id !== id));
+      if (expandedId === id) setExpandedId(null);
+    } catch {
+      setError("Не удалось удалить эту проверку.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  if (history.length === 0) return null;
+
+  return (
+    <div className="history">
+      <div className="history-header" onClick={() => setCollapsed(c => !c)}>
+        <h2>История точечных проверок ({history.length})</h2>
+        <span className="collapse-toggle">{collapsed ? "▸ Показать" : "▾ Скрыть"}</span>
+      </div>
+      {error && <div className="error-box">{error}</div>}
+      {!collapsed && history.map(h => {
+        const isOpen = expandedId === h.id;
+        return (
+          <div key={h.id} className="history-entry-wrap">
+            <div className="history-row-wrap">
+              <button
+                type="button"
+                className="history-row"
+                onClick={() => setExpandedId(isOpen ? null : h.id)}
+              >
+                {new Date(h.created_at).toLocaleString("ru-RU")}
+                {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
+                {" — "}{flagForLang(h.source_lang)}→{flagForLang(h.target_lang)} {h.target_lang}
+                {" — "}{h.findings.length === 0 ? "без проблем" : `${h.findings.length} найдено`}
+                {" — "}{formatCostRu(h.cost_usd)}
+              </button>
+              <button
+                type="button"
+                className="history-delete-button"
+                title="Удалить эту проверку"
+                disabled={deletingId === h.id}
+                onClick={e => handleDelete(e, h.id)}
+              >
+                ✕
+              </button>
+            </div>
+            {isOpen && (
+              <div className="history-entry-detail">
+                <div className="history-pair">
+                  <div><strong>Источник:</strong> {h.source}</div>
+                  <div><strong>Перевод:</strong> {h.translation}</div>
+                </div>
+                {h.findings.map((f, i) => (
+                  <div key={i} className={`finding finding-${f.severity}`}>
+                    <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
+                    <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
+                    <div className="finding-message">{f.message}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function MultiCheckHistoryList({
+  manager,
+  project,
+  refreshSignal,
+  onOpen,
+  onDeleted,
+  autoPoll = true,
+}: {
+  manager: Manager;
+  project: Project;
+  refreshSignal?: number;
+  // Opening an entry means showing its full findings — that whole detail
+  // view lives on the check-runner screen, so this just tells the parent
+  // which check id to open there (CheckRunner shows it inline; ProjectView
+  // navigates to the check screen with it).
+  onOpen: (id: number) => void;
+  // Called after a successful delete — lets CheckRunner clear its own
+  // results panel if the deleted entry is the one currently shown there.
+  onDeleted?: (id: number) => void;
+  // CheckRunner already polls the one actively-open result itself, so it
+  // passes false here to avoid this list ALSO polling the whole history
+  // (and, server-side, re-checking every processing batch) every 20s at
+  // the same time. ProjectView has no such poll of its own, so it keeps
+  // the default — that's the only place a still-processing entry gets its
+  // percentage updated live without the manager opening it.
+  autoPoll?: boolean;
+}) {
+  const [history, setHistory] = useState<MultiCheckHistoryEntry[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    multiCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
+  }, [project.id, manager.id, refreshSignal]);
+
+  // While anything here is still processing, keep quietly re-fetching so
+  // the percentage moves along on its own — same idea as CheckRunner's own
+  // per-check poll, just for the whole list at once.
+  useEffect(() => {
+    if (!autoPoll || !history.some(h => h.status === "processing")) return;
+    const timer = setInterval(() => {
+      multiCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [autoPoll, history, project.id, manager.id]);
+
+  async function handleDelete(e: MouseEvent, id: number) {
+    e.stopPropagation();
+    if (!window.confirm("Удалить эту проверку из истории? Отменить будет нельзя.")) return;
+    setDeletingId(id);
+    setError("");
+    try {
+      await deleteMultiCheck(project.id, id, manager.id);
+      setHistory(prev => prev.filter(h => h.id !== id));
+      onDeleted?.(id);
+    } catch {
+      setError("Не удалось удалить эту проверку.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  if (history.length === 0) return null;
+
+  return (
+    <div className="history">
+      <div className="history-header" onClick={() => setCollapsed(c => !c)}>
+        <h2>История загрузок документов ({history.length})</h2>
+        <span className="collapse-toggle">{collapsed ? "▸ Показать" : "▾ Скрыть"}</span>
+      </div>
+      {error && <div className="error-box">{error}</div>}
+      {!collapsed && history.map(h => (
+        <div key={h.id} className="history-row-wrap">
+          <button
+            className={`history-row ${h.status === "processing" ? "history-row-processing" : ""}`}
+            onClick={() => onOpen(h.id)}
+          >
+            {new Date(h.created_at).toLocaleString("ru-RU")}
+            {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
+            {" — "}{h.filename}
+            {" — "}
+            {h.status === "processing"
+              ? (h.progress && h.progress.total > 0
+                  ? `обрабатывается — ${Math.round((h.progress.done / h.progress.total) * 100)}%`
+                  : "ещё обрабатывается…")
+              : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`}
+          </button>
+          <button
+            type="button"
+            className="history-delete-button"
+            title="Удалить эту проверку"
+            disabled={deletingId === h.id}
+            onClick={e => handleDelete(e, h.id)}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
