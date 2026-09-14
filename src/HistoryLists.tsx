@@ -156,17 +156,26 @@ export function MultiCheckHistoryList({
     return () => clearInterval(timer);
   }, [autoPoll, history, project.id, manager.id]);
 
-  async function handleDelete(e: MouseEvent, id: number) {
+  // Deleting a still-processing entry doubles as cancelling it (the backend
+  // tells Anthropic to stop working on it) — Александр asked for a way to
+  // stop a check that's taking too long, or that he just changed his mind
+  // about. The confirmation wording says "отменить" for those, since
+  // "удалить" would read as if there were already a finished report to
+  // lose, when there isn't yet.
+  async function handleDelete(e: MouseEvent, h: MultiCheckHistoryEntry) {
     e.stopPropagation();
-    if (!window.confirm("Удалить эту проверку из истории? Отменить будет нельзя.")) return;
-    setDeletingId(id);
+    const confirmMsg = h.status === "processing"
+      ? "Отменить эту проверку? Она ещё обрабатывается — отмена остановит её и уберёт из истории. Отменить это действие будет нельзя."
+      : "Удалить эту проверку из истории? Отменить будет нельзя.";
+    if (!window.confirm(confirmMsg)) return;
+    setDeletingId(h.id);
     setError("");
     try {
-      await deleteMultiCheck(project.id, id, manager.id);
-      setHistory(prev => prev.filter(h => h.id !== id));
-      onDeleted?.(id);
+      await deleteMultiCheck(project.id, h.id, manager.id);
+      setHistory(prev => prev.filter(x => x.id !== h.id));
+      onDeleted?.(h.id);
     } catch {
-      setError("Не удалось удалить эту проверку.");
+      setError(h.status === "processing" ? "Не удалось отменить эту проверку." : "Не удалось удалить эту проверку.");
     } finally {
       setDeletingId(null);
     }
@@ -220,9 +229,9 @@ export function MultiCheckHistoryList({
           <button
             type="button"
             className="history-delete-button"
-            title="Удалить эту проверку"
+            title={h.status === "processing" ? "Отменить эту проверку" : "Удалить эту проверку"}
             disabled={deletingId === h.id}
-            onClick={e => handleDelete(e, h.id)}
+            onClick={e => handleDelete(e, h)}
           >
             ✕
           </button>

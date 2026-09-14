@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  detectFileLanguages, getToneStatus,
+  deleteMultiCheck, detectFileLanguages, getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck,
 } from "./api";
@@ -77,6 +77,7 @@ export default function CheckRunner({
   const [singleCost, setSingleCost] = useState(0);
   const [multiResult, setMultiResult] = useState<MultiCheckResponse | null>(null);
   const [polling, setPolling] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Bumped whenever the matching history list below should re-fetch (a
   // check just ran, or a batch just finished polling) — kept separate so
@@ -257,6 +258,29 @@ export default function CheckRunner({
       setFindings(null);
     } catch {
       setError("Не удалось загрузить эту проверку.");
+    }
+  }
+
+  // Cancels the multi-check currently shown in the "processing" panel
+  // below — e.g. it's turning out slower than expected and the manager
+  // would rather re-upload with "Срочно", or they simply changed their
+  // mind. Deleting a still-processing check doubles as cancelling it (the
+  // backend tells Anthropic to stop working on it), same as the ✕ button
+  // in the history list further down — this is just a more visible way to
+  // reach it right from the panel that's actually showing "processing".
+  async function cancelProcessing() {
+    if (!multiResult) return;
+    if (!window.confirm("Отменить проверку? Она ещё обрабатывается — отмена остановит её. Отменить это действие будет нельзя.")) return;
+    setCancelling(true);
+    setError("");
+    try {
+      await deleteMultiCheck(project.id, multiResult.multi_check_id, manager.id);
+      setMultiResult(null);
+      setMultiHistorySignal(s => s + 1);
+    } catch {
+      setError("Не удалось отменить проверку.");
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -465,6 +489,15 @@ export default function CheckRunner({
               />
             </div>
           )}
+          <button
+            type="button"
+            className="link-button danger-link"
+            style={{ marginTop: 10 }}
+            onClick={cancelProcessing}
+            disabled={cancelling}
+          >
+            {cancelling ? "Отменяю…" : "✕ Отменить проверку"}
+          </button>
         </div>
       )}
 
