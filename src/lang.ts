@@ -32,13 +32,21 @@ function regionFlag(region: string): string {
 // the actual language columns seen across Александр's real uploaded
 // files, not guessed.
 const BASE_LANG_FALLBACK: Record<string, string> = {
-  en: "🇬🇧", ru: "🇷🇺", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹", pt: "🇵🇹",
+  en: "🇬🇧", ru: "🇷🇺", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹",
   ar: "🇸🇦", zh: "🇨🇳", ja: "🇯🇵", ko: "🇰🇷", vi: "🇻🇳", th: "🇹🇭", pl: "🇵🇱",
   tr: "🇹🇷", uk: "🇺🇦", id: "🇮🇩", ms: "🇲🇾", hi: "🇮🇳",
   // fixes literal tofu (no real country shares these letters):
   kk: "🇰🇿", el: "🇬🇷", sw: "🇹🇿", te: "🇮🇳", ur: "🇵🇰",
   // fixes a real but wrong country flag (alphabet coincidence):
   bn: "🇧🇩", ky: "🇰🇬", mr: "🇮🇳", tg: "🇹🇯", tl: "🇵🇭",
+  // Александр's Portuguese is always Brazilian, never Portugal's — the
+  // backend already defaults a bare "pt" column/catalog entry to "pt-br"
+  // (app.excel_multi._normalize_lang_label), which gets its flag from the
+  // region-code path below ("br" -> 🇧🇷) without ever reaching this table.
+  // This entry only matters for a bare "pt" that slips through anyway (an
+  // older catalog entry saved before that default existed) — same flag
+  // either way, never Portugal's 🇵🇹.
+  pt: "🇧🇷",
   // already correct via the region-code fallback below by coincidence —
   // listed explicitly anyway so the table stays the complete reference
   // for every language this project actually handles:
