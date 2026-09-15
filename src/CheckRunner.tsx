@@ -4,7 +4,7 @@ import {
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck,
 } from "./api";
-import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import type {
@@ -78,6 +78,17 @@ export default function CheckRunner({
   const [multiResult, setMultiResult] = useState<MultiCheckResponse | null>(null);
   const [polling, setPolling] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+
+  // "Все" by default (shows everything, same as before) or one specific
+  // language, so Александр can narrow the results down to just the
+  // language he's currently looking at instead of scrolling past the
+  // others — reset back to "Все" whenever a different check's results come
+  // on screen, so the filter never silently carries over from one upload
+  // to the next.
+  const [langFilter, setLangFilter] = useState<string>("all");
+  useEffect(() => {
+    setLangFilter("all");
+  }, [multiResult?.multi_check_id]);
 
   // Bumped whenever the matching history list below should re-fetch (a
   // check just ran, or a batch just finished polling) — kept separate so
@@ -294,6 +305,11 @@ export default function CheckRunner({
   }, [openMultiCheckId]);
 
   const unrecognized = multiResult?.sheets?.flatMap(s => s.unrecognized_columns) || [];
+  // Every language checked across every sheet, in the order it first
+  // appears — the full "Все" set the filter buttons below are built from.
+  const resultLangs: string[] = multiResult?.sheets
+    ? [...new Set(multiResult.sheets.flatMap(s => s.languages_checked))]
+    : [];
   const elapsedMinutes = multiResult?.created_at
     ? Math.max(0, Math.floor((nowTick - Date.parse(multiResult.created_at)) / 60000))
     : 0;
@@ -512,15 +528,17 @@ export default function CheckRunner({
         </div>
       )}
 
-      {multiResult && multiResult.status === "completed" && multiResult.summary && multiResult.sheets && (
+      {multiResult && multiResult.status === "completed" && multiResult.summary && multiResult.sheets && (() => {
+        const durationText = formatDurationRu(multiResult.created_at, multiResult.completed_at);
+        const criteriaText = describeChecksRu(multiResult.checks_run);
+        return (
         <div className="results">
           <h2>Результат — {multiResult.summary.total_findings} проблем в {multiResult.summary.languages_checked.length} языках</h2>
           <p className="muted small">
             Исходный язык: {multiResult.source_lang}. Строк проверено: {multiResult.summary.rows_checked}.
             {" "}Проверка завершена, стоимость составила: {formatCostRu(multiResult.cost_usd || 0)}.
-            {formatDurationRu(multiResult.created_at, multiResult.completed_at) && (
-              <> Заняла: {formatDurationRu(multiResult.created_at, multiResult.completed_at)}.</>
-            )}
+            {durationText && <> Заняла: {durationText}.</>}
+            {criteriaText && <> Критерии: {criteriaText}.</>}
           </p>
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
@@ -542,11 +560,35 @@ export default function CheckRunner({
             ⧉ Открыть в новой вкладке
           </button>
 
-          {multiResult.sheets.map(sheet => (
+          {resultLangs.length > 1 && (
+            <div className="lang-filter-bar">
+              <button
+                type="button"
+                className={`lang-filter-btn ${langFilter === "all" ? "active" : ""}`}
+                onClick={() => setLangFilter("all")}
+              >
+                Все
+              </button>
+              {resultLangs.map(lang => (
+                <button
+                  key={lang}
+                  type="button"
+                  className={`lang-filter-btn ${langFilter === lang ? "active" : ""}`}
+                  onClick={() => setLangFilter(lang)}
+                >
+                  {flagForLang(lang)} {lang}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {multiResult.sheets
+            .filter(sheet => sheet.languages_checked.some(l => langFilter === "all" || l === langFilter))
+            .map(sheet => (
             <div key={sheet.sheet_name} className="sheet-block">
               {multiResult.sheets!.length > 1 && <h3>{sheet.sheet_name}</h3>}
 
-              {sheet.languages_checked.map(lang => {
+              {sheet.languages_checked.filter(l => langFilter === "all" || l === langFilter).map(lang => {
                 const rows = sheet.languages[lang] || [];
                 return (
                   <div key={lang} className="lang-block">
@@ -578,7 +620,8 @@ export default function CheckRunner({
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
 
       <SingleCheckHistoryList manager={manager} project={project} refreshSignal={singleHistorySignal} />
       <MultiCheckHistoryList

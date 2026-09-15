@@ -90,6 +90,11 @@ export interface MultiCheckResponse {
   // Only present once status is "completed" — together with created_at,
   // lets the UI show how long the check actually took.
   completed_at?: string | null;
+  // Only present once status is "completed" — the actual criteria keys
+  // this check ran with (e.g. only the free algorithmic ones, or also the
+  // AI-based ones), so the UI can show a "Критерии: ..." line and make a
+  // $0 cost self-explaining instead of looking like something broke.
+  checks_run?: string[];
 }
 
 export interface MultiCheckHistoryEntry {

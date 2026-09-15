@@ -15,10 +15,34 @@ function regionFlag(region: string): string {
 // A handful of common bare (no-region) language codes that would otherwise
 // get no flag at all — picked as the language's most common/original
 // country, purely for a recognizable icon, not a political statement.
+//
+// Every entry here exists for one of two reasons, and both matter: either
+// the code's uppercase form isn't a real ISO 3166 country code at all (so
+// without an entry here it falls through to the last-resort regionFlag()
+// attempt below, which produces a flag emoji sequence with no matching
+// glyph — rendered as literal tofu letter-boxes, e.g. Kazakh "kk" showing
+// as "KK" in two boxes, which is what sent Александр looking for this in
+// the first place), or it IS a real country code but for the WRONG
+// country (a coincidence of the alphabet, not a relation to the
+// language) — e.g. Kyrgyz "ky" alphabetically collides with the Cayman
+// Islands' real country code "KY", Tajik "tg" with Togo's "TG", Marathi
+// "mr" with Mauritania's "MR", Bengali "bn" with Brunei's "BN", Tagalog
+// "tl" with Timor-Leste's "TL" — each would otherwise silently show a
+// real but unrelated country's flag. Every code below was checked against
+// the actual language columns seen across Александр's real uploaded
+// files, not guessed.
 const BASE_LANG_FALLBACK: Record<string, string> = {
   en: "🇬🇧", ru: "🇷🇺", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹", pt: "🇵🇹",
   ar: "🇸🇦", zh: "🇨🇳", ja: "🇯🇵", ko: "🇰🇷", vi: "🇻🇳", th: "🇹🇭", pl: "🇵🇱",
   tr: "🇹🇷", uk: "🇺🇦", id: "🇮🇩", ms: "🇲🇾", hi: "🇮🇳",
+  // fixes literal tofu (no real country shares these letters):
+  kk: "🇰🇿", el: "🇬🇷", sw: "🇹🇿", te: "🇮🇳", ur: "🇵🇰",
+  // fixes a real but wrong country flag (alphabet coincidence):
+  bn: "🇧🇩", ky: "🇰🇬", mr: "🇮🇳", tg: "🇹🇯", tl: "🇵🇭",
+  // already correct via the region-code fallback below by coincidence —
+  // listed explicitly anyway so the table stays the complete reference
+  // for every language this project actually handles:
+  az: "🇦🇿", uz: "🇺🇿", ro: "🇷🇴",
 };
 
 export function flagForLang(code: string): string {
@@ -82,6 +106,20 @@ export function buildChecksToSend(selected: string[]): string[] {
   if (out.has("punctuation")) out.add("numbers");
   out.add("max_length"); // no-op unless the file actually has a Max length column
   return [...out];
+}
+
+// Turns the raw checks_run keys a completed check ran with (e.g.
+// ["punctuation", "numbers", "max_length"]) into the same Russian labels
+// shown on the checkbox screen ("Оформление (алгоритм)", ...), so a
+// completed check's summary can say exactly which criteria were used —
+// makes a $0 cost self-explaining (only the free "(алгоритм)" ones were
+// ticked) instead of looking like a glitch. Silently drops the
+// behind-the-scenes keys buildChecksToSend adds on top ("numbers",
+// "max_length") since they're not user-facing choices of their own.
+export function describeChecksRu(checksRun?: string[]): string {
+  if (!checksRun || checksRun.length === 0) return "";
+  const set = new Set(checksRun);
+  return CHECK_OPTIONS.filter(c => set.has(c.key)).map(c => c.label).join(", ");
 }
 
 export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medium: "Средне", low: "Мелочь" };

@@ -313,6 +313,32 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .download-link:hover { text-decoration: underline; }
 
+/* Lets Александр narrow the always-visible sequential breakdown down to
+   just one language instead of scrolling past the others — "Все" (the
+   default) shows everything, same as before this existed. */
+.lang-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 4px;
+}
+.lang-filter-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 5px 12px;
+}
+.lang-filter-btn:hover { border-color: var(--accent); }
+.lang-filter-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
 /* --- history --- */
 .history { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 14px; }
 .history-header {

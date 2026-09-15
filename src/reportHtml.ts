@@ -5,7 +5,7 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { flagForLang, formatCostRu, formatDurationRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { describeChecksRu, flagForLang, formatCostRu, formatDurationRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import type { MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
@@ -54,6 +54,13 @@ const REPORT_CSS = `
   .finding-severity { font-weight: 700; margin-right: 8px; }
   .finding-type { color: #6b7280; font-size: 0.75rem; text-transform: uppercase; }
   .finding-message { margin-top: 4px; }
+  .lang-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
+  .lang-filter-btn {
+    background: #fff; border: 1px solid #dde1e7; border-radius: 999px; color: #1c2230;
+    cursor: pointer; font-size: 0.82rem; padding: 5px 12px;
+  }
+  .lang-filter-btn:hover { border-color: #6366f1; }
+  .lang-filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
 `;
 
 export function buildReportHtml(result: MultiCheckResponse): string {
@@ -84,7 +91,7 @@ export function buildReportHtml(result: MultiCheckResponse): string {
             </div>
           `).join("");
       return `
-        <div class="lang-block">
+        <div class="lang-block" data-lang="${esc(lang)}">
           <h4 class="lang-block-title ${rows.length > 0 ? "has-findings" : ""}">${esc(flagForLang(lang))} ${esc(lang)} — ${rows.length > 0 ? `${rows.length} найдено` : "без проблем"}</h4>
           <div class="lang-results">${rowsHtml}</div>
         </div>
@@ -99,6 +106,31 @@ export function buildReportHtml(result: MultiCheckResponse): string {
     `;
   }).join("");
 
+  // Every language checked across every sheet, in first-appearance order —
+  // drives the "Все" / per-language filter buttons below, same behavior as
+  // the on-screen results in CheckRunner.tsx (this page has no framework,
+  // so the filtering itself happens via plain JS at the bottom instead of
+  // React state).
+  const allLangs = [...new Set(sheets.flatMap(s => s.languages_checked))];
+  // Language codes are attacker-reachable (they come straight from a
+  // column header in whatever .xlsx someone uploads — excel_multi.py's
+  // _normalize_lang_label deliberately keeps almost anything short and
+  // space-free rather than validating it against a known set), so the
+  // filter value is carried ONLY via the data-lang attribute (HTML-escaped
+  // by esc(), which is a value-safe context) and read back in the
+  // <script> below through .dataset — never interpolated into an inline
+  // onclick="...(...)" string, which would additionally need JS-string
+  // escaping (esc() alone doesn't do that: it neutralizes "<>&"'" for HTML
+  // parsing, but the attribute is later handed to the JS parser too, and a
+  // language code containing e.g. a quote or "//" could break out of the
+  // intended call and run arbitrary script in the report page).
+  const filterBarHtml = allLangs.length > 1 ? `
+    <div class="lang-filter-bar">
+      <button type="button" class="lang-filter-btn active" data-lang="all">Все</button>
+      ${allLangs.map(l => `<button type="button" class="lang-filter-btn" data-lang="${esc(l)}">${esc(flagForLang(l))} ${esc(l)}</button>`).join("")}
+    </div>
+  ` : "";
+
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -110,10 +142,40 @@ export function buildReportHtml(result: MultiCheckResponse): string {
 <body>
   <div class="page">
     <h1>${esc(titleText)}</h1>
-    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}</p>` : ""}
+    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}${(() => { const c = describeChecksRu(result.checks_run); return c ? ` Критерии: ${esc(c)}.` : ""; })()}</p>` : ""}
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
+    ${filterBarHtml}
     ${sheetsHtml}
   </div>
+  <script>
+    // Narrows the always-visible breakdown down to one language's findings
+    // — "Все" (the default, matching the active button on load) shows
+    // everything, same as before this existed. Reads the target language
+    // from the clicked button's own data-lang attribute (never from a
+    // string built server-side and handed to an inline onclick="...") —
+    // a language code comes straight from an uploaded file's column
+    // header, so it isn't trustworthy enough to interpolate into a script
+    // string.
+    function filterLang(lang, btn) {
+      document.querySelectorAll(".lang-block").forEach(function (el) {
+        el.hidden = lang !== "all" && el.getAttribute("data-lang") !== lang;
+      });
+      document.querySelectorAll(".sheet-block").forEach(function (el) {
+        var anyVisible = Array.prototype.some.call(el.querySelectorAll(".lang-block"), function (lb) {
+          return !lb.hidden;
+        });
+        el.hidden = !anyVisible;
+      });
+      document.querySelectorAll(".lang-filter-btn").forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+    }
+    document.querySelectorAll(".lang-filter-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        filterLang(btn.dataset.lang, btn);
+      });
+    });
+  </script>
 </body>
 </html>`;
 }
