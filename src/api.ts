@@ -1,5 +1,6 @@
 import type {
   Finding,
+  LanguageAlias,
   Manager,
   MultiCheckHistoryEntry,
   MultiCheckResponse,
@@ -155,6 +156,25 @@ export function verifyLanguages(
   formData.append("file", file);
   formData.append("codes", codes.join(","));
   return requestForm(`/projects/${projectId}/multi-check/verify-languages`, formData);
+}
+
+// --- language alias dictionary (GLOBAL — not scoped to a project, unlike
+// the catalog above; open to every folder, not just admin — see
+// app.main's "language aliases" section and LanguageAliases.tsx) ---
+
+export function listLanguageAliases(): Promise<{ aliases: LanguageAlias[] }> {
+  return request("/language-aliases");
+}
+
+export function addLanguageAlias(managerId: number, alias: string, canonicalCode: string): Promise<{ aliases: LanguageAlias[] }> {
+  return request("/language-aliases", {
+    method: "POST",
+    body: JSON.stringify({ manager_id: managerId, alias, canonical_code: canonicalCode }),
+  });
+}
+
+export function deleteLanguageAlias(aliasId: number, managerId: number): Promise<{ aliases: LanguageAlias[] }> {
+  return request(`/language-aliases/${aliasId}?manager_id=${managerId}`, { method: "DELETE" });
 }
 
 // --- reference documents (tone-of-address) ---

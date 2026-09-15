@@ -3,6 +3,7 @@ import { listManagers, listProjects } from "./api";
 import ChangePasswordModal from "./ChangePasswordModal";
 import CheckRunner from "./CheckRunner";
 import FolderPicker from "./FolderPicker";
+import LanguageAliases from "./LanguageAliases";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
 import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
@@ -11,7 +12,8 @@ import type { Manager, Project } from "./types";
 type View =
   | { name: "projects" }
   | { name: "project"; project: Project }
-  | { name: "check"; project: Project; openMultiCheckId?: number };
+  | { name: "check"; project: Project; openMultiCheckId?: number }
+  | { name: "aliases" };
 
 // Keeps the manager on the exact screen they were on across a page reload
 // instead of dropping them back to the folder picker every time — Александр's
@@ -127,6 +129,13 @@ export default function App() {
     if (manager) saveStoredSession({ managerId: manager.id, view: { name: "check", projectId: project.id } });
   }
 
+  // Global screen, not tied to any project — deliberately not persisted
+  // into StoredSession (a reload just falls back to whatever project
+  // screen was last saved, same as before this existed).
+  function openAliases() {
+    setView({ name: "aliases" });
+  }
+
   function backToProjects() {
     setView({ name: "projects" });
     if (manager) saveStoredSession({ managerId: manager.id, view: { name: "projects" } });
@@ -167,6 +176,7 @@ export default function App() {
           onOpenProject={openProject}
           onSwitchFolder={handleSwitchFolder}
           onOpenChangePassword={() => setShowChangePassword(true)}
+          onOpenAliases={openAliases}
         />
       ) : view.name === "project" ? (
         <ProjectView
@@ -176,6 +186,8 @@ export default function App() {
           onProjectDeleted={backToProjects}
           onBack={backToProjects}
         />
+      ) : view.name === "aliases" ? (
+        <LanguageAliases manager={manager} onBack={backToProjects} />
       ) : (
         <CheckRunner
           manager={manager}

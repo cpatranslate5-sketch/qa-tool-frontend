@@ -18,6 +18,18 @@ export interface ToneStatus {
   rule_count: number;
 }
 
+// One taught spelling in the global language-alias dictionary — see
+// api.ts listLanguageAliases/addLanguageAlias/deleteLanguageAlias and
+// LanguageAliases.tsx. Global (not per-project) and open to every folder,
+// not just admin — matches the backend's non-admin-gated design.
+export interface LanguageAlias {
+  id: number;
+  alias: string;
+  canonical_code: string;
+  added_by_name: string;
+  created_at: string | null;
+}
+
 export interface Finding {
   type: string;
   severity: "low" | "medium" | "high";
