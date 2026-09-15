@@ -10,6 +10,7 @@
   --accent-fg: #14171F;
   --danger: #C1503A;
   --warning: #E8A23D;
+  --success: #4FAE6B;
   --low-severity: #8B78F2;
 }
 [data-theme="light"] {
@@ -24,6 +25,7 @@
   --accent-fg: #FFFFFF;
   --danger: #B23B27;
   --warning: #A9660E;
+  --success: #2F8F52;
   --low-severity: #6A3FD1;
 }
 
@@ -109,6 +111,16 @@ button:disabled { opacity: 0.5; cursor: default; }
   padding: 8px 12px;
   margin-top: 10px;
   font-size: 0.82rem;
+}
+.success-box {
+  color: var(--success);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 .progress-bar {
   margin-top: 8px;

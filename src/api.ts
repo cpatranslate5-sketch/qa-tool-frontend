@@ -117,6 +117,23 @@ export function detectFileLanguages(
   return requestForm(`/projects/${projectId}/multi-check/detect-languages`, formData);
 }
 
+// Александр's redesign of the language-selection flow: instead of trusting
+// an auto-generated "here's what we found" list (easy to miss an ABSENCE
+// from — that's exactly how a real language went missing before this
+// existed), the manager ticks which languages they expect, presses
+// "Подтвердить выбор языков", and this is the explicit per-language yes/no
+// that drives it — found via the same safe bridging resolve_lang_code uses
+// everywhere else (a code spelled differently in the file still counts),
+// missing only when nothing safely matches.
+export function verifyLanguages(
+  projectId: number, file: File, codes: string[]
+): Promise<{ results: { code: string; found: boolean }[] }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("codes", codes.join(","));
+  return requestForm(`/projects/${projectId}/multi-check/verify-languages`, formData);
+}
+
 // --- reference documents (tone-of-address) ---
 
 export function getToneStatus(projectId: number): Promise<ToneStatus> {

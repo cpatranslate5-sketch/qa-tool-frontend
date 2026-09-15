@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   deleteMultiCheck, detectFileLanguages, getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
-  runCheck,
+  runCheck, verifyLanguages,
 } from "./api";
 import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
@@ -42,15 +42,23 @@ export default function CheckRunner({
   const [sourceText, setSourceText] = useState("");
   const [translationText, setTranslationText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Guards against two rapid file picks racing: if a slower detectFileLanguages
+  // response for an earlier file lands after a newer one was already picked,
+  // its result must be dropped rather than overwriting the catalog with stale
+  // data — bumped on every onFileChosen call, checked before applying a result.
+  const fileDetectToken = useRef(0);
   const [fileName, setFileName] = useState("");
 
   // --- target language(s): single choice for a text pair, multi for a file ---
   const [allLangs, setAllLangs] = useState<string[] | null>(null);
   // Languages actually found in the currently-selected FILE (file mode
-  // only) — takes over from allLangs (the project's Tone document) once a
-  // file is chosen, since the file itself is the real source of truth for
-  // "what target languages exist here". null before any file is picked, or
-  // if detection failed (falls back to allLangs either way).
+  // only) — MERGED into allLangs (the project's Tone document) once a file
+  // is chosen, rather than replacing it, so the checkbox catalog is a
+  // stable superset of "every language ever seen in this project" and a
+  // language never silently drops out of the list just because this
+  // particular file's own detection missed it. null before any file is
+  // picked, or if detection failed (falls back to allLangs alone either
+  // way).
   const [fileLangs, setFileLangs] = useState<string[] | null>(null);
   const [fileLangsLoading, setFileLangsLoading] = useState(false);
   // Column headers detect-languages couldn't recognize as a language at
@@ -62,6 +70,20 @@ export default function CheckRunner({
   const [fileUnrecognizedCols, setFileUnrecognizedCols] = useState<string[]>([]);
   const [targetLangSingle, setTargetLangSingle] = useState("");
   const [targetLangsMulti, setTargetLangsMulti] = useState<string[]>([]);
+
+  // Александр's redesign: the manager ticks the languages they expect,
+  // presses "Подтвердить выбор языков", and ONLY once every ticked
+  // language is confirmed present in the file (via verify-languages) does
+  // "Начать проверку" become pressable — rather than trusting the
+  // auto-detected list and hoping a missing language gets NOTICED.
+  // languagesConfirmed stays false (and must be re-earned) after ANY
+  // change that could invalidate it: a different file, or a different set
+  // of ticked languages — see the effect below.
+  const [languagesConfirmed, setLanguagesConfirmed] = useState(false);
+  const [confirmingLanguages, setConfirmingLanguages] = useState(false);
+  // Codes that came back "not found" on the last confirm attempt — null
+  // means "no attempt yet since the last invalidation", not "all found".
+  const [missingLanguages, setMissingLanguages] = useState<string[] | null>(null);
 
   // --- step 2: criteria ---
   const [checks, setChecks] = useState<string[]>(CHECK_OPTIONS.map(c => c.key));
@@ -118,6 +140,16 @@ export default function CheckRunner({
     setTargetLangsMulti([]);
   }, [sourceLang]);
 
+  // A previous "Подтвердить выбор языков" confirmation is only valid for
+  // the EXACT file + language selection it was run against — invalidate it
+  // the moment either changes, so a stale "✓ confirmed" can never carry
+  // over to a different file or a tweaked selection without being
+  // re-earned.
+  useEffect(() => {
+    setLanguagesConfirmed(false);
+    setMissingLanguages(null);
+  }, [targetLangsMulti, fileName]);
+
   // large multi-checks go to Anthropic's cheaper batch queue and come back
   // "processing" — keep quietly re-checking until it flips to "completed".
   // Every tick's fresh progress is applied to the screen even while still
@@ -168,16 +200,44 @@ export default function CheckRunner({
     return () => clearInterval(timer);
   }, [multiResult?.status]);
 
-  // In file mode, once a file has been picked, its OWN languages are the
-  // source of truth for what can be checked — falls back to the project's
-  // Tone-document languages before a file is chosen, or in text mode.
-  const targetLangSource = mode === "file" && fileLangs !== null ? fileLangs : (allLangs || []);
+  // In file mode, once a file has been picked, the checkbox catalog is the
+  // UNION of the project's Tone-document languages and this file's own
+  // detected languages — not the file's alone. Replacing one with the
+  // other (as this used to do) is exactly how a genuinely-present language
+  // could vanish from the picker: this file's own detection is one signal
+  // among several, not the sole source of truth, and the actual
+  // per-language presence check now happens explicitly in the "Подтвердить
+  // выбор языков" step below (see verify-languages) rather than being
+  // implied by whether a checkbox even exists.
+  const targetLangSource = mode === "file" && fileLangs !== null
+    ? [...new Set([...(allLangs || []), ...fileLangs])].sort()
+    : (allLangs || []);
   const targetCandidates = targetLangSource.filter(l => baseLang(l) !== sourceLang);
   const targetsReady = mode === "file"
     ? (fileLangs !== null || (!fileLangsLoading && allLangs !== null))
     : allLangs !== null;
 
+  async function confirmLanguages() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file || targetLangsMulti.length === 0) return;
+    setConfirmingLanguages(true);
+    try {
+      const r = await verifyLanguages(project.id, file, targetLangsMulti);
+      const missing = r.results.filter(row => !row.found).map(row => row.code);
+      setMissingLanguages(missing);
+      setLanguagesConfirmed(missing.length === 0);
+    } catch {
+      // Network/server hiccup — treat as "not confirmed" rather than
+      // silently letting the manager proceed on an unknown state.
+      setMissingLanguages(null);
+      setLanguagesConfirmed(false);
+    } finally {
+      setConfirmingLanguages(false);
+    }
+  }
+
   async function onFileChosen(file: File | undefined) {
+    const token = ++fileDetectToken.current;
     setFileName(file?.name || "");
     setTargetLangsMulti([]);
     setFileUnrecognizedCols([]);
@@ -188,14 +248,16 @@ export default function CheckRunner({
     setFileLangsLoading(true);
     try {
       const r = await detectFileLanguages(project.id, file);
+      if (token !== fileDetectToken.current) return; // a newer file was picked meanwhile
       setFileLangs(r.languages);
       setFileUnrecognizedCols(r.unrecognized_columns || []);
     } catch {
+      if (token !== fileDetectToken.current) return;
       // Falls back to the Tone document's languages (targetLangSource
       // above) rather than blocking the manager from checking at all.
       setFileLangs(null);
     } finally {
-      setFileLangsLoading(false);
+      if (token === fileDetectToken.current) setFileLangsLoading(false);
     }
   }
 
@@ -231,6 +293,11 @@ export default function CheckRunner({
     targetsChosen &&
     checks.length > 0 &&
     missingDocsForSelected.length === 0 &&
+    // File mode only: the manager must explicitly confirm every ticked
+    // language was actually found in the file (see "Подтвердить выбор
+    // языков" above) before a check can run — text mode has no file to
+    // confirm against, so it's unaffected.
+    (mode === "text" || languagesConfirmed) &&
     !loading;
 
   async function start() {
@@ -430,6 +497,26 @@ export default function CheckRunner({
                 </label>
               ))}
             </div>
+            {targetLangsMulti.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <button type="button" className="secondary" onClick={confirmLanguages} disabled={confirmingLanguages}>
+                  {confirmingLanguages ? "Проверяю…" : "Подтвердить выбор языков"}
+                </button>
+                {languagesConfirmed && (
+                  <div className="success-box">✓ Языки распознаны, можно начинать проверку.</div>
+                )}
+                {missingLanguages !== null && missingLanguages.length > 0 && (
+                  <div className="info-box">
+                    {missingLanguages.map(code => (
+                      <div key={code}>
+                        Не найден язык «{code}». Переименуйте нужную колонку в файле на «{code}» и загрузите
+                        документ заново — либо снимите галочку с этого языка, если проверять его сейчас не нужно.
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
         {sourceLang && mode === "text" && targetCandidates.length > 0 && (
@@ -484,6 +571,9 @@ export default function CheckRunner({
         {loading ? "Проверяю…" : mode === "file" ? "Начать проверку" : "Начать проверку"}
       </button>
       {!checks.length && <p className="muted small">Выберите хотя бы один критерий проверки.</p>}
+      {mode === "file" && hasFile && targetsChosen && !languagesConfirmed && (
+        <p className="muted small">Сначала подтвердите выбор языков (шаг 2) — кнопка выше.</p>
+      )}
 
       {error && <div className="error-box">{error}</div>}
 
