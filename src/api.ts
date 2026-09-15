@@ -93,25 +93,48 @@ export function deleteProject(projectId: number, managerId: number, code: string
   });
 }
 
+// The project's manually-curated "which languages do I check here"
+// catalog — the ONLY source of the target-language checkboxes. Changes
+// only through addCatalogLanguage/deleteCatalogLanguage below, never as
+// a side effect of uploading a Tone document or a file to check.
 export function knownLanguages(projectId: number): Promise<{ languages: string[] }> {
   return request(`/projects/${projectId}/known-languages`);
 }
 
-// Language codes actually found as column headers in an uploaded file —
-// used once a file is selected in the multi-check flow, so the target-
-// language checkboxes reflect what's really IN this file rather than only
-// what the project's Tone document happens to mention (a language can be
-// legitimately present in the file without ever needing a tone-of-address
-// rule — English chiefly, which rarely needs a ты/вы-style distinction).
-// unrecognized_columns: header text parse_workbook couldn't recognize as a
-// language (or as Context/Max length/a known meta column) — surfaced here,
-// before the manager presses "start", so a genuine language column that
-// got missed (a typo'd code, an unusual spelling) can be spotted and fixed
-// up front rather than only noticed afterward, by which point an AI-backed
-// check may already have run without ever covering it.
+export function addCatalogLanguage(projectId: number, managerId: number, langCode: string): Promise<{ languages: string[] }> {
+  return request(`/projects/${projectId}/languages`, {
+    method: "POST",
+    body: JSON.stringify({ manager_id: managerId, lang_code: langCode }),
+  });
+}
+
+export function deleteCatalogLanguage(projectId: number, managerId: number, langCode: string): Promise<{ languages: string[] }> {
+  return request(`/projects/${projectId}/languages/${encodeURIComponent(langCode)}?manager_id=${managerId}`, {
+    method: "DELETE",
+  });
+}
+
+// Language codes found as column headers in an uploaded file, checked
+// against the project's own catalog above — used once a file is selected
+// in the multi-check flow, purely as an ADVISORY (the checkboxes
+// themselves never change based on this). Three buckets:
+// - languages: found in the file AND already on the catalog — real,
+//   checkable target languages.
+// - unknown_languages: look language-shaped but aren't on the catalog at
+//   all (Александр's concrete case: a column literally labelled "PR",
+//   meant as Portuguese but not a real code for it, used to silently
+//   become a selectable target language with Peru's flag) — surfaced so
+//   the manager can rename the column (if it's a mistake) or explicitly
+//   add the language to the catalog (if it's genuinely new).
+// - unrecognized_columns: header text parse_workbook couldn't recognize
+//   as a language at all (or as Context/Max length/a known meta column).
+// All surfaced before the manager presses "start", so any of the three
+// situations can be caught and fixed up front rather than only noticed
+// afterward, by which point an AI-backed check may already have run
+// without ever covering the language that needed it.
 export function detectFileLanguages(
   projectId: number, file: File
-): Promise<{ languages: string[]; unrecognized_columns: string[] }> {
+): Promise<{ languages: string[]; unknown_languages: string[]; unrecognized_columns: string[] }> {
   const formData = new FormData();
   formData.append("file", file);
   return requestForm(`/projects/${projectId}/multi-check/detect-languages`, formData);
@@ -145,17 +168,6 @@ export function uploadTone(managerId: number, projectId: number, file: File): Pr
   formData.append("file", file);
   formData.append("manager_id", String(managerId));
   return requestForm(`/projects/${projectId}/tone/upload`, formData);
-}
-
-// Removes one straggler language from the Tone-of-address catalog without
-// touching the rest of the document — for when a project inherited a
-// language it never actually had (e.g. copied from another project) and
-// re-uploading the whole spreadsheet would be overkill just to drop one
-// entry. See ProjectView's per-language ✕ next to the document status.
-export function deleteToneLanguage(projectId: number, managerId: number, code: string): Promise<ToneStatus> {
-  return request(`/projects/${projectId}/tone/languages/${encodeURIComponent(code)}?manager_id=${managerId}`, {
-    method: "DELETE",
-  });
 }
 
 // --- checking: one text pair (single target language) ---

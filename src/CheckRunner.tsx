@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  deleteMultiCheck, detectFileLanguages, getToneStatus,
+  addCatalogLanguage, deleteMultiCheck, detectFileLanguages, getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
@@ -50,17 +50,28 @@ export default function CheckRunner({
   const [fileName, setFileName] = useState("");
 
   // --- target language(s): single choice for a text pair, multi for a file ---
+  // The ONLY source of the target-language checkboxes — the project's
+  // manually-curated catalog (see ProjectView's "Языки проекта"). Never
+  // touched by anything below: a file's own detected languages are shown
+  // purely as an advisory (see fileLangs/fileUnknownLanguages), never
+  // merged into this list. That merge is exactly what used to let a
+  // mislabeled column ("PR", meant as Portuguese) silently become a real,
+  // checkable target language with Peru's flag — Александр asked for the
+  // catalog to change only when he explicitly adds or removes a language.
   const [allLangs, setAllLangs] = useState<string[] | null>(null);
-  // Languages actually found in the currently-selected FILE (file mode
-  // only) — MERGED into allLangs (the project's Tone document) once a file
-  // is chosen, rather than replacing it, so the checkbox catalog is a
-  // stable superset of "every language ever seen in this project" and a
-  // language never silently drops out of the list just because this
-  // particular file's own detection missed it. null before any file is
-  // picked, or if detection failed (falls back to allLangs alone either
-  // way).
+  // Of the current FILE's own language-shaped columns (file mode only):
+  // fileLangs = the ones that also match the project's catalog (purely
+  // informational — "found N of your languages in this file");
+  // fileUnknownLanguages = the ones that look like a language code but
+  // aren't on the catalog at all, surfaced with an inline "add to
+  // catalog" action (see addUnknownLanguage below) so the manager can
+  // either fix a mislabeled column in the file or explicitly register a
+  // genuinely new language — never have it added for them. Both null
+  // before any file is picked, or if detection failed.
   const [fileLangs, setFileLangs] = useState<string[] | null>(null);
+  const [fileUnknownLanguages, setFileUnknownLanguages] = useState<string[]>([]);
   const [fileLangsLoading, setFileLangsLoading] = useState(false);
+  const [addingLangCode, setAddingLangCode] = useState<string | null>(null);
   // Column headers detect-languages couldn't recognize as a language at
   // all — shown as its own up-front notice (see the "3. Проверка
   // автоопределения" panel below) instead of only surfacing inside a
@@ -200,22 +211,11 @@ export default function CheckRunner({
     return () => clearInterval(timer);
   }, [multiResult?.status]);
 
-  // In file mode, once a file has been picked, the checkbox catalog is the
-  // UNION of the project's Tone-document languages and this file's own
-  // detected languages — not the file's alone. Replacing one with the
-  // other (as this used to do) is exactly how a genuinely-present language
-  // could vanish from the picker: this file's own detection is one signal
-  // among several, not the sole source of truth, and the actual
-  // per-language presence check now happens explicitly in the "Подтвердить
-  // выбор языков" step below (see verify-languages) rather than being
-  // implied by whether a checkbox even exists.
-  const targetLangSource = mode === "file" && fileLangs !== null
-    ? [...new Set([...(allLangs || []), ...fileLangs])].sort()
-    : (allLangs || []);
-  const targetCandidates = targetLangSource.filter(l => baseLang(l) !== sourceLang);
-  const targetsReady = mode === "file"
-    ? (fileLangs !== null || (!fileLangsLoading && allLangs !== null))
-    : allLangs !== null;
+  // The checkbox candidates are always exactly the project's catalog,
+  // regardless of mode or whether a file has been picked — see allLangs
+  // above for why.
+  const targetCandidates = (allLangs || []).filter(l => baseLang(l) !== sourceLang);
+  const targetsReady = allLangs !== null;
 
   async function confirmLanguages() {
     const file = fileInputRef.current?.files?.[0];
@@ -236,28 +236,61 @@ export default function CheckRunner({
     }
   }
 
-  async function onFileChosen(file: File | undefined) {
+  // Re-runs detect-languages for the given file and applies the result —
+  // pulled out of onFileChosen so it can also be called after adding a
+  // language to the catalog (see addUnknownLanguage below) WITHOUT
+  // resetting targetLangsMulti/fileUnrecognizedCols the way picking a
+  // genuinely new file does.
+  async function detectAndSetFileLanguages(file: File) {
     const token = ++fileDetectToken.current;
-    setFileName(file?.name || "");
-    setTargetLangsMulti([]);
-    setFileUnrecognizedCols([]);
-    if (!file) {
-      setFileLangs(null);
-      return;
-    }
     setFileLangsLoading(true);
     try {
       const r = await detectFileLanguages(project.id, file);
       if (token !== fileDetectToken.current) return; // a newer file was picked meanwhile
       setFileLangs(r.languages);
+      setFileUnknownLanguages(r.unknown_languages || []);
       setFileUnrecognizedCols(r.unrecognized_columns || []);
     } catch {
       if (token !== fileDetectToken.current) return;
-      // Falls back to the Tone document's languages (targetLangSource
-      // above) rather than blocking the manager from checking at all.
       setFileLangs(null);
+      setFileUnknownLanguages([]);
     } finally {
       if (token === fileDetectToken.current) setFileLangsLoading(false);
+    }
+  }
+
+  async function onFileChosen(file: File | undefined) {
+    setFileName(file?.name || "");
+    setTargetLangsMulti([]);
+    setFileUnrecognizedCols([]);
+    setFileUnknownLanguages([]);
+    if (!file) {
+      setFileLangs(null);
+      fileDetectToken.current++; // invalidate any detection still in flight
+      return;
+    }
+    await detectAndSetFileLanguages(file);
+  }
+
+  // The inline "Добавить в список" action on an unknown-language notice —
+  // registers the language in the project's catalog (an explicit action,
+  // exactly what Александр asked for instead of it happening on its own),
+  // then re-detects against the SAME file so that column now counts as
+  // recognized. Deliberately doesn't go through onFileChosen: that would
+  // also wipe out any languages already ticked, which would be a
+  // confusing side effect of what's meant to be a small, additive fix.
+  async function addUnknownLanguage(code: string) {
+    const file = fileInputRef.current?.files?.[0];
+    setAddingLangCode(code);
+    setError("");
+    try {
+      const r = await addCatalogLanguage(project.id, manager.id, code);
+      setAllLangs(r.languages);
+      if (file) await detectAndSetFileLanguages(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось добавить язык.");
+    } finally {
+      setAddingLangCode(null);
     }
   }
 
@@ -466,21 +499,43 @@ export default function CheckRunner({
         )}
         {sourceLang && !(mode === "file" && fileLangsLoading) && targetsReady && targetCandidates.length === 0 && (
           <p className="muted small">
-            {mode === "file" && fileLangs !== null
-              ? "В этом файле не найдено ни одного языка, кроме языка оригинала."
-              : "В документах проекта (Тон обращения) пока не найдено ни одного языка, кроме языка оригинала."}
+            В списке языков проекта пока нет ни одного языка, кроме языка оригинала — добавьте нужные языки в
+            разделе «Языки проекта» на странице проекта.
           </p>
         )}
         {sourceLang && mode === "file" && fileLangs !== null && !fileLangsLoading && (
           <p className="muted small">
-            Автоматически найдено языков в файле: {fileLangs.length}. Проверьте список ниже — если
-            какого-то языка не хватает, скорее всего в файле его колонка называется необычно.
+            В файле найдено языковых колонок: {fileLangs.length + fileUnknownLanguages.length}, из них в вашем
+            списке языков — {fileLangs.length}.
           </p>
         )}
         {sourceLang && mode === "file" && fileUnrecognizedCols.length > 0 && (
           <div className="info-box">
             Эти колонки не распознаны как язык и не будут проверяться: «{fileUnrecognizedCols.join("», «")}».
             Если среди них должен быть язык — переименуйте колонку в файле и загрузите его заново.
+          </div>
+        )}
+        {sourceLang && mode === "file" && fileUnknownLanguages.length > 0 && (
+          <div className="warn-box">
+            {fileUnknownLanguages.map(code => (
+              <div key={code} style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span>
+                  В файле найдена колонка «{code.toUpperCase()}», похожая на язык, но её нет в вашем списке
+                  языков. Если это опечатка — переименуйте колонку в файле. Если это новый язык — добавьте его в
+                  список.
+                </span>
+                {manager.is_admin && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={addingLangCode === code}
+                    onClick={() => addUnknownLanguage(code)}
+                  >
+                    {addingLangCode === code ? "Добавляю…" : `Добавить «${code.toUpperCase()}» в список`}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         )}
         {sourceLang && mode === "file" && targetCandidates.length > 0 && (
