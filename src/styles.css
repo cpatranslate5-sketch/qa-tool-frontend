@@ -209,6 +209,33 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 10px 0 20px; }
 
+/* The actual languages stored in a project document (e.g. Тон обращения),
+   shown as removable chips so a leftover/wrong entry — like one carried
+   over from "copy from an existing project" — can be spotted and dropped
+   without touching the rest of the document. */
+.doc-lang-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.doc-lang-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 6px 4px 10px;
+  font-size: 0.78rem;
+  color: var(--fg);
+}
+.chip-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.chip-remove:hover { color: var(--danger); background: var(--panel-2); }
+.chip-remove:disabled { opacity: 0.4; cursor: default; }
+
 .extra-instructions { margin: 4px 0 14px; }
 .extra-instructions textarea { font-size: 0.85rem; }
 

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   deleteProject,
+  deleteToneLanguage,
   getToneStatus,
+  knownLanguages,
   uploadTone,
 } from "./api";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
+import { flagForLang } from "./lang";
 import type { Manager, Project, ToneStatus } from "./types";
 
 type DocKind = "tone";
@@ -20,17 +23,26 @@ function DocCard({
   kind,
   isAdmin,
   status,
+  languages,
   onUploaded,
+  onDeleteLanguage,
 }: {
   kind: DocKind;
   isAdmin: boolean;
   status: { filename: string; uploaded_at: string | null; count: number } | null;
+  // The actual language codes currently stored for this document (not just
+  // the count) — lets a manager see at a glance what's really in there,
+  // and an admin drop a single straggler (see onDeleteLanguage) without
+  // hunting through the source spreadsheet for it.
+  languages: string[] | null;
   onUploaded: (file: File) => Promise<void>;
+  onDeleteLanguage: (code: string) => Promise<void>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [removingCode, setRemovingCode] = useState<string | null>(null);
   const meta = DOC_META[kind];
 
   async function submit(e: React.FormEvent) {
@@ -51,6 +63,18 @@ function DocCard({
     }
   }
 
+  async function handleDeleteLanguage(code: string) {
+    setRemovingCode(code);
+    setError("");
+    try {
+      await onDeleteLanguage(code);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось убрать язык.");
+    } finally {
+      setRemovingCode(null);
+    }
+  }
+
   return (
     <div className="doc-section">
       <label>{meta.title}</label>
@@ -65,6 +89,27 @@ function DocCard({
         <div className="doc-readonly"><span className="muted">не загружен</span></div>
       )}
 
+      {languages && languages.length > 0 && (
+        <div className="doc-lang-chips">
+          {languages.map(code => (
+            <span key={code} className="doc-lang-chip">
+              {flagForLang(code)} {code.toUpperCase()}
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="chip-remove"
+                  disabled={removingCode === code}
+                  title={`Убрать «${code.toUpperCase()}» из документа «${meta.title}», не трогая остальные языки`}
+                  onClick={() => handleDeleteLanguage(code)}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
       {isAdmin && (
         <form className="inline-form" onSubmit={submit}>
           <input ref={fileRef} type="file" accept=".xlsx" />
@@ -73,7 +118,9 @@ function DocCard({
         </form>
       )}
       {error && <div className="error-box">{error}</div>}
-      <p className="muted small">{meta.hint} Загрузка полностью заменяет предыдущий файл.</p>
+      <p className="muted small">
+        {meta.hint} Загрузка полностью заменяет предыдущий файл — отдельный язык можно убрать крестиком выше, не трогая остальные.
+      </p>
     </div>
   );
 }
@@ -95,6 +142,7 @@ export default function ProjectView({
   onBack: () => void;
 }) {
   const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
+  const [toneLangs, setToneLangs] = useState<string[] | null>(null);
   const [error, setError] = useState("");
 
   const [showDelete, setShowDelete] = useState(false);
@@ -104,7 +152,21 @@ export default function ProjectView({
 
   useEffect(() => {
     getToneStatus(project.id).then(setToneStatus).catch(() => {});
+    knownLanguages(project.id).then(r => setToneLangs(r.languages)).catch(() => setToneLangs(null));
   }, [project.id]);
+
+  // Drops one language from the Tone-of-address catalog — the ✕ in DocCard
+  // calls this. Re-fetches the language list rather than filtering it
+  // locally: merge_lang_codes can collapse a bare code and a fuller one
+  // (e.g. "ko" and "ko-KR") into a single displayed entry, so removing
+  // just the ONE row behind that chip doesn't guarantee the code vanishes
+  // from the merged list — a local filter could show it as gone when a
+  // same-language row still remains underneath.
+  async function removeToneLanguage(code: string) {
+    const updated = await deleteToneLanguage(project.id, manager.id, code);
+    setToneStatus(updated);
+    knownLanguages(project.id).then(r => setToneLangs(r.languages)).catch(() => {});
+  }
 
   async function submitDelete(e: React.FormEvent) {
     e.preventDefault();
@@ -137,7 +199,12 @@ export default function ProjectView({
             kind="tone"
             isAdmin={manager.is_admin}
             status={toneStatus ? { filename: toneStatus.filename, uploaded_at: toneStatus.uploaded_at, count: toneStatus.rule_count } : null}
-            onUploaded={async file => setToneStatus(await uploadTone(manager.id, project.id, file))}
+            languages={toneLangs}
+            onUploaded={async file => {
+              setToneStatus(await uploadTone(manager.id, project.id, file));
+              knownLanguages(project.id).then(r => setToneLangs(r.languages)).catch(() => {});
+            }}
+            onDeleteLanguage={removeToneLanguage}
           />
         </div>
       </section>

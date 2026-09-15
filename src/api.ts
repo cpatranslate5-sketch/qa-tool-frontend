@@ -147,6 +147,17 @@ export function uploadTone(managerId: number, projectId: number, file: File): Pr
   return requestForm(`/projects/${projectId}/tone/upload`, formData);
 }
 
+// Removes one straggler language from the Tone-of-address catalog without
+// touching the rest of the document — for when a project inherited a
+// language it never actually had (e.g. copied from another project) and
+// re-uploading the whole spreadsheet would be overkill just to drop one
+// entry. See ProjectView's per-language ✕ next to the document status.
+export function deleteToneLanguage(projectId: number, managerId: number, code: string): Promise<ToneStatus> {
+  return request(`/projects/${projectId}/tone/languages/${encodeURIComponent(code)}?manager_id=${managerId}`, {
+    method: "DELETE",
+  });
+}
+
 // --- checking: one text pair (single target language) ---
 
 export function runCheck(params: {
