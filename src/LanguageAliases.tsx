@@ -113,16 +113,25 @@ export default function LanguageAliases({
 
       <form className="inline-form" onSubmit={submitAdd} style={{ marginTop: 10 }}>
         <input
-          value={newAlias}
-          onChange={e => setNewAlias(e.target.value)}
-          placeholder='Написание, например "Portuguese Brazil"'
-          style={{ maxWidth: 260 }}
-        />
-        <input
           value={newCode}
           onChange={e => setNewCode(e.target.value)}
           placeholder="Код языка, например pt-br"
+          list="known-lang-codes"
           style={{ maxWidth: 180 }}
+        />
+        {/* Same codes already in the table below — lets a manager pick an
+            existing language instead of retyping it, while still allowing
+            a brand-new code to be typed freely (a <datalist> combo, not a
+            closed dropdown, since a taught code doesn't have to be one
+            that's already here). */}
+        <datalist id="known-lang-codes">
+          {groups.map(([code]: readonly [string, LanguageAlias[]]) => <option key={code} value={code} />)}
+        </datalist>
+        <input
+          value={newAlias}
+          onChange={e => setNewAlias(e.target.value)}
+          placeholder='Вариант написания, например "ENG"'
+          style={{ maxWidth: 260 }}
         />
         <button type="submit" disabled={adding || !newAlias.trim() || !newCode.trim()}>
           {adding ? "Добавляю…" : "Добавить"}
