@@ -53,6 +53,13 @@ export default function CheckRunner({
   // if detection failed (falls back to allLangs either way).
   const [fileLangs, setFileLangs] = useState<string[] | null>(null);
   const [fileLangsLoading, setFileLangsLoading] = useState(false);
+  // Column headers detect-languages couldn't recognize as a language at
+  // all — shown as its own up-front notice (see the "3. Проверка
+  // автоопределения" panel below) instead of only surfacing inside a
+  // finished report, so a genuine language column that got missed (a
+  // typo'd code, an unusual spelling) can be caught and fixed BEFORE an
+  // AI-backed check runs, not after it's already been paid for.
+  const [fileUnrecognizedCols, setFileUnrecognizedCols] = useState<string[]>([]);
   const [targetLangSingle, setTargetLangSingle] = useState("");
   const [targetLangsMulti, setTargetLangsMulti] = useState<string[]>([]);
 
@@ -173,6 +180,7 @@ export default function CheckRunner({
   async function onFileChosen(file: File | undefined) {
     setFileName(file?.name || "");
     setTargetLangsMulti([]);
+    setFileUnrecognizedCols([]);
     if (!file) {
       setFileLangs(null);
       return;
@@ -181,6 +189,7 @@ export default function CheckRunner({
     try {
       const r = await detectFileLanguages(project.id, file);
       setFileLangs(r.languages);
+      setFileUnrecognizedCols(r.unrecognized_columns || []);
     } catch {
       // Falls back to the Tone document's languages (targetLangSource
       // above) rather than blocking the manager from checking at all.
@@ -394,6 +403,18 @@ export default function CheckRunner({
               ? "В этом файле не найдено ни одного языка, кроме языка оригинала."
               : "В документах проекта (Тон обращения) пока не найдено ни одного языка, кроме языка оригинала."}
           </p>
+        )}
+        {sourceLang && mode === "file" && fileLangs !== null && !fileLangsLoading && (
+          <p className="muted small">
+            Автоматически найдено языков в файле: {fileLangs.length}. Проверьте список ниже — если
+            какого-то языка не хватает, скорее всего в файле его колонка называется необычно.
+          </p>
+        )}
+        {sourceLang && mode === "file" && fileUnrecognizedCols.length > 0 && (
+          <div className="info-box">
+            Эти колонки не распознаны как язык и не будут проверяться: «{fileUnrecognizedCols.join("», «")}».
+            Если среди них должен быть язык — переименуйте колонку в файле и загрузите его заново.
+          </div>
         )}
         {sourceLang && mode === "file" && targetCandidates.length > 0 && (
           <>

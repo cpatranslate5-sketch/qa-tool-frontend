@@ -103,7 +103,15 @@ export function knownLanguages(projectId: number): Promise<{ languages: string[]
 // what the project's Tone document happens to mention (a language can be
 // legitimately present in the file without ever needing a tone-of-address
 // rule — English chiefly, which rarely needs a ты/вы-style distinction).
-export function detectFileLanguages(projectId: number, file: File): Promise<{ languages: string[] }> {
+// unrecognized_columns: header text parse_workbook couldn't recognize as a
+// language (or as Context/Max length/a known meta column) — surfaced here,
+// before the manager presses "start", so a genuine language column that
+// got missed (a typo'd code, an unusual spelling) can be spotted and fixed
+// up front rather than only noticed afterward, by which point an AI-backed
+// check may already have run without ever covering it.
+export function detectFileLanguages(
+  projectId: number, file: File
+): Promise<{ languages: string[]; unrecognized_columns: string[] }> {
   const formData = new FormData();
   formData.append("file", file);
   return requestForm(`/projects/${projectId}/multi-check/detect-languages`, formData);
