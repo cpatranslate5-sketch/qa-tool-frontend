@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  addCatalogLanguage, deleteMultiCheck, detectFileLanguages, getToneStatus,
+  deleteMultiCheck, detectFileLanguages, getToneStatus,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
@@ -63,15 +63,14 @@ export default function CheckRunner({
   // fileLangs = the ones that also match the project's catalog (purely
   // informational — "found N of your languages in this file");
   // fileUnknownLanguages = the ones that look like a language code but
-  // aren't on the catalog at all, surfaced with an inline "add to
-  // catalog" action (see addUnknownLanguage below) so the manager can
-  // either fix a mislabeled column in the file or explicitly register a
-  // genuinely new language — never have it added for them. Both null
-  // before any file is picked, or if detection failed.
+  // aren't on the catalog at all — shown as a plain notice pointing the
+  // manager at renaming the column or adding the language themselves on
+  // the project page (no inline "add" action here anymore — Александр
+  // asked for that shortcut button to be removed). Both null before any
+  // file is picked, or if detection failed.
   const [fileLangs, setFileLangs] = useState<string[] | null>(null);
   const [fileUnknownLanguages, setFileUnknownLanguages] = useState<string[]>([]);
   const [fileLangsLoading, setFileLangsLoading] = useState(false);
-  const [addingLangCode, setAddingLangCode] = useState<string | null>(null);
   // Column headers detect-languages couldn't recognize as a language at
   // all — shown as its own up-front notice (see the "3. Проверка
   // автоопределения" panel below) instead of only surfacing inside a
@@ -236,11 +235,7 @@ export default function CheckRunner({
     }
   }
 
-  // Re-runs detect-languages for the given file and applies the result —
-  // pulled out of onFileChosen so it can also be called after adding a
-  // language to the catalog (see addUnknownLanguage below) WITHOUT
-  // resetting targetLangsMulti/fileUnrecognizedCols the way picking a
-  // genuinely new file does.
+  // Runs detect-languages for the given file and applies the result.
   async function detectAndSetFileLanguages(file: File) {
     const token = ++fileDetectToken.current;
     setFileLangsLoading(true);
@@ -270,28 +265,6 @@ export default function CheckRunner({
       return;
     }
     await detectAndSetFileLanguages(file);
-  }
-
-  // The inline "Добавить в список" action on an unknown-language notice —
-  // registers the language in the project's catalog (an explicit action,
-  // exactly what Александр asked for instead of it happening on its own),
-  // then re-detects against the SAME file so that column now counts as
-  // recognized. Deliberately doesn't go through onFileChosen: that would
-  // also wipe out any languages already ticked, which would be a
-  // confusing side effect of what's meant to be a small, additive fix.
-  async function addUnknownLanguage(code: string) {
-    const file = fileInputRef.current?.files?.[0];
-    setAddingLangCode(code);
-    setError("");
-    try {
-      const r = await addCatalogLanguage(project.id, manager.id, code);
-      setAllLangs(r.languages);
-      if (file) await detectAndSetFileLanguages(file);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось добавить язык.");
-    } finally {
-      setAddingLangCode(null);
-    }
   }
 
   function toggleCheck(key: string) {
@@ -530,22 +503,12 @@ export default function CheckRunner({
         {sourceLang && mode === "file" && fileUnknownLanguages.length > 0 && (
           <div className="warn-box">
             {fileUnknownLanguages.map(code => (
-              <div key={code} style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div key={code} style={{ marginBottom: 6 }}>
                 <span>
                   В файле найдена колонка «{code.toUpperCase()}», похожая на язык, но её нет в вашем списке
-                  языков. Если это опечатка — переименуйте колонку в файле. Если это новый язык — добавьте его в
-                  список.
+                  языков. Если это опечатка — переименуйте колонку в файле. Если это новый язык — добавьте его
+                  вручную в разделе «Языки проекта» на странице проекта.
                 </span>
-                {manager.is_admin && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={addingLangCode === code}
-                    onClick={() => addUnknownLanguage(code)}
-                  >
-                    {addingLangCode === code ? "Добавляю…" : `Добавить «${code.toUpperCase()}» в список`}
-                  </button>
-                )}
               </div>
             ))}
           </div>
