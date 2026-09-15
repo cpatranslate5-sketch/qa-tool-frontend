@@ -220,16 +220,26 @@ export default function CheckRunner({
     const file = fileInputRef.current?.files?.[0];
     if (!file || targetLangsMulti.length === 0) return;
     setConfirmingLanguages(true);
+    setError("");
     try {
       const r = await verifyLanguages(project.id, file, targetLangsMulti);
       const missing = r.results.filter(row => !row.found).map(row => row.code);
       setMissingLanguages(missing);
       setLanguagesConfirmed(missing.length === 0);
-    } catch {
+    } catch (err) {
       // Network/server hiccup — treat as "not confirmed" rather than
-      // silently letting the manager proceed on an unknown state.
+      // silently letting the manager proceed on an unknown state. This
+      // used to fail completely silently (the button just went clickable
+      // again with no explanation at all) — Александр hit exactly that,
+      // so the same visible error-box the rest of this screen already
+      // uses (see `start` above) is shown here too, instead of nothing.
       setMissingLanguages(null);
       setLanguagesConfirmed(false);
+      setError(
+        err instanceof Error
+          ? `Не удалось подтвердить выбор языков: ${err.message}`
+          : "Не удалось подтвердить выбор языков.",
+      );
     } finally {
       setConfirmingLanguages(false);
     }
