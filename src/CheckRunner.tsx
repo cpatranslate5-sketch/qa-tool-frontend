@@ -419,6 +419,18 @@ export default function CheckRunner({
   const resultLangs: string[] = multiResult?.sheets
     ? [...new Set(multiResult.sheets.flatMap(s => s.languages_checked))]
     : [];
+  // How many rows had findings for each language, summed across every
+  // sheet it appears in — the same number already shown in that
+  // language's own section header ("N найдено") below, just surfaced on
+  // the filter button itself too, so a language with problems stands out
+  // ("HI (4)") before even scrolling down to it.
+  const findingsCountByLang: Record<string, number> = {};
+  multiResult?.sheets?.forEach(sheet => {
+    sheet.languages_checked.forEach(lang => {
+      const rows = sheet.languages[lang] || [];
+      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + rows.length;
+    });
+  });
   const elapsedMinutes = multiResult?.created_at
     ? Math.max(0, Math.floor((nowTick - Date.parse(multiResult.created_at)) / 60000))
     : 0;
@@ -739,10 +751,10 @@ export default function CheckRunner({
                 <button
                   key={lang}
                   type="button"
-                  className={`lang-filter-btn ${langFilter === lang ? "active" : ""}`}
+                  className={`lang-filter-btn ${langFilter === lang ? "active" : ""} ${findingsCountByLang[lang] > 0 ? "has-findings" : ""}`}
                   onClick={() => setLangFilter(lang)}
                 >
-                  {flagForLang(lang)} {lang}
+                  {flagForLang(lang)} {lang}{findingsCountByLang[lang] > 0 && ` (${findingsCountByLang[lang]})`}
                 </button>
               ))}
             </div>

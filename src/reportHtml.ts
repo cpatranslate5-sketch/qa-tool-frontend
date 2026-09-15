@@ -61,6 +61,7 @@ const REPORT_CSS = `
   }
   .lang-filter-btn:hover { border-color: #6366f1; }
   .lang-filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
+  .lang-filter-btn.has-findings:not(.active) { border-color: #b45309; color: #b45309; font-weight: 600; }
 `;
 
 export function buildReportHtml(result: MultiCheckResponse): string {
@@ -112,6 +113,17 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   // so the filtering itself happens via plain JS at the bottom instead of
   // React state).
   const allLangs = [...new Set(sheets.flatMap(s => s.languages_checked))];
+  // How many rows had findings for each language, summed across every
+  // sheet it appears in — same number as that language's own section
+  // heading, just shown on the filter button too ("HI (4)"), so a
+  // problem language stands out before scrolling down to it.
+  const findingsCountByLang: Record<string, number> = {};
+  sheets.forEach(sheet => {
+    sheet.languages_checked.forEach(lang => {
+      const rows = sheet.languages[lang] || [];
+      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + rows.length;
+    });
+  });
   // Language codes are attacker-reachable (they come straight from a
   // column header in whatever .xlsx someone uploads — excel_multi.py's
   // _normalize_lang_label deliberately keeps almost anything short and
@@ -127,7 +139,11 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   const filterBarHtml = allLangs.length > 1 ? `
     <div class="lang-filter-bar">
       <button type="button" class="lang-filter-btn active" data-lang="all">Все</button>
-      ${allLangs.map(l => `<button type="button" class="lang-filter-btn" data-lang="${esc(l)}">${esc(flagForLang(l))} ${esc(l)}</button>`).join("")}
+      ${allLangs.map(l => {
+        const count = findingsCountByLang[l] || 0;
+        const cls = count > 0 ? "lang-filter-btn has-findings" : "lang-filter-btn";
+        return `<button type="button" class="${cls}" data-lang="${esc(l)}">${esc(flagForLang(l))} ${esc(l)}${count > 0 ? ` (${count})` : ""}</button>`;
+      }).join("")}
     </div>
   ` : "";
 

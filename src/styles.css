@@ -377,6 +377,16 @@ button:disabled { opacity: 0.5; cursor: default; }
   color: #fff;
   font-weight: 600;
 }
+/* A language with findings stands out even before scrolling down to its
+   own section — same orange used for that section's own heading
+   (.lang-block-title.has-findings) and the count matches it exactly
+   ("HI (4)"). Skipped while the button is also the active filter, so the
+   accent-colored "selected" state stays the one unambiguous signal. */
+.lang-filter-btn.has-findings:not(.active) {
+  border-color: var(--warning);
+  color: var(--warning);
+  font-weight: 600;
+}
 
 /* --- history --- */
 .history { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 14px; }
