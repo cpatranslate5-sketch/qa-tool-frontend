@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { addLanguageAlias, deleteLanguageAlias, listLanguageAliases } from "./api";
 import { flagForLang } from "./lang";
 import type { LanguageAlias, Manager } from "./types";
@@ -13,6 +13,14 @@ import type { LanguageAlias, Manager } from "./types";
 // admin — matches the backend's non-admin-gated design: a wrong or
 // redundant entry is low-stakes and self-correcting, since everyone can see
 // who added what and fix a mistake themselves.
+//
+// The backend only enforces uniqueness on the SPELLING (alias) side — many
+// different spellings can freely point at the same canonical_code, which is
+// exactly what Александр asked for (a language often has several ways
+// people type it). This screen shows that as a grouped table — one row per
+// language actually taught here, with every spelling that resolves to it
+// listed together — rather than the flat alias-by-alias list the API
+// itself returns, which made the many-to-one relationship hard to see.
 export default function LanguageAliases({
   manager,
   onBack,
@@ -37,6 +45,21 @@ export default function LanguageAliases({
         setError("Не удалось загрузить словарь языков.");
       });
   }, []);
+
+  // One group per canonical_code, each holding every alias row taught for
+  // it — sorted so the table reads the same way every time (groups by
+  // code, variants inside a group by how long they've been taught).
+  const groups = useMemo(() => {
+    const byCode = new Map<string, LanguageAlias[]>();
+    for (const row of aliases || []) {
+      const list = byCode.get(row.canonical_code);
+      if (list) list.push(row);
+      else byCode.set(row.canonical_code, [row]);
+    }
+    return [...byCode.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([code, rows]) => [code, rows.sort((a, b) => a.id - b.id)] as const);
+  }, [aliases]);
 
   async function submitAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -81,7 +104,9 @@ export default function LanguageAliases({
         Общий для всех папок список: здесь можно научить платформу, что какое-то написание языка
         (например, столбец в файле или в документе «Тон обращения») означает определённый код —
         и дальше это будет распознаваться везде само, без ручного вмешательства. Регистр не имеет
-        значения. Добавлять и удалять варианты может любая папка, не только админская.
+        значения. На один язык можно добавить сколько угодно вариантов написания — ограничение
+        только на то, чтобы одно и то же написание не было заведено дважды. Добавлять и удалять
+        варианты может любая папка, не только админская.
       </p>
 
       {error && <div className="error-box">{error}</div>}
@@ -109,26 +134,31 @@ export default function LanguageAliases({
         <div className="muted" style={{ marginTop: 16 }}>Словарь пока пуст — добавьте первый вариант написания выше.</div>
       )}
 
-      {aliases !== null && aliases.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          {aliases.map(row => (
-            <div key={row.id} className="history-row-wrap">
-              <div className="history-row">
-                «{row.alias}» → {flagForLang(row.canonical_code)} {row.canonical_code.toUpperCase()}
-                <span className="muted small">
-                  {" "}— добавил(а) {row.added_by_name || "неизвестно"}
-                  {row.created_at ? `, ${new Date(row.created_at).toLocaleString("ru-RU")}` : ""}
-                </span>
+      {groups.length > 0 && (
+        <div className="alias-table">
+          {groups.map(([code, rows]: readonly [string, LanguageAlias[]]) => (
+            <div key={code} className="alias-group-row">
+              <div className="alias-group-lang">{flagForLang(code)} {code.toUpperCase()}</div>
+              <div className="doc-lang-chips">
+                {rows.map(row => (
+                  <span
+                    key={row.id}
+                    className="doc-lang-chip"
+                    title={`Добавил(а) ${row.added_by_name || "неизвестно"}${row.created_at ? `, ${new Date(row.created_at).toLocaleString("ru-RU")}` : ""}`}
+                  >
+                    {row.alias}
+                    <button
+                      type="button"
+                      className="chip-remove"
+                      disabled={removingId === row.id}
+                      title={`Удалить «${row.alias}» из словаря`}
+                      onClick={() => handleDelete(row)}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
               </div>
-              <button
-                type="button"
-                className="history-delete-button"
-                disabled={removingId === row.id}
-                title={`Удалить «${row.alias}» из словаря`}
-                onClick={() => handleDelete(row)}
-              >
-                ✕
-              </button>
             </div>
           ))}
         </div>

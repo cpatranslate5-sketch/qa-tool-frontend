@@ -236,6 +236,25 @@ button:disabled { opacity: 0.5; cursor: default; }
 .chip-remove:hover { color: var(--danger); background: var(--panel-2); }
 .chip-remove:disabled { opacity: 0.4; cursor: default; }
 
+/* Словарь языков — one row per canonical language (flag + code, left),
+   every taught spelling for it as removable chips (right). A row only
+   exists once at least one spelling has been taught for that code. */
+.alias-table { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.alias-group-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.alias-group-row:last-child { border-bottom: none; }
+.alias-group-lang {
+  flex: 0 0 120px;
+  font-weight: 600;
+  padding-top: 4px;
+}
+.alias-group-row .doc-lang-chips { margin-top: 0; flex: 1 1 auto; }
+
 .extra-instructions { margin: 4px 0 14px; }
 .extra-instructions textarea { font-size: 0.85rem; }
 
