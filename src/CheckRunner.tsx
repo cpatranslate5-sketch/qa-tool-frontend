@@ -104,8 +104,13 @@ export default function CheckRunner({
   // "Срочно" — file mode only: forces the instant path (2x price) instead
   // of Anthropic's cheaper but up-to-an-hour batch queue, for a big
   // upload that can't wait — Александр asked for this after hitting the
-  // "проверяется в очереди" notice on an urgent file.
-  const [urgent, setUrgent] = useState(false);
+  // "проверяется в очереди" notice on an urgent file. Defaults to ON
+  // (his own explicit ask, after this session's checks turned out cheap
+  // enough overall that he'd rather always pay full price for instant
+  // results than wait up to an hour) — still a checkbox, not hardcoded,
+  // so a specific big upload can still be sent through the cheaper queue
+  // by unticking it.
+  const [urgent, setUrgent] = useState(true);
 
   // --- doc status, for the missing-document warning ---
   const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
