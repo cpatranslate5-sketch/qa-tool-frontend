@@ -1,5 +1,35 @@
 // Shared helpers for displaying language codes, and the check-criteria list
 // used by the unified check-flow screen (CheckRunner.tsx).
+import type { Finding, MultiCheckRowResult } from "./types";
+
+// True for the synthetic tone-of-address report row a language's results
+// get exactly once when "register" is selected — see the backend's
+// _register_summary_block (excel_row 0, a single register_summary
+// finding, no real source/translation). It's a factual "here's the tone
+// actually used" note, not a problem, so it must be kept out of every "N
+// найдено"/"N problems" count and out of the orange "has findings"
+// highlighting — otherwise a language with zero real issues still shows
+// as if something needs fixing purely because the register check ran.
+export function isRegisterSummaryRow(row: MultiCheckRowResult): boolean {
+  return row.findings.length === 1 && row.findings[0].type === "register_summary";
+}
+
+// The row count actually shown to the manager ("N найдено") — every row
+// EXCEPT the register report row above. Used by both CheckRunner.tsx (the
+// on-screen results) and reportHtml.ts (the downloadable/new-tab report),
+// so the two stay consistent.
+export function realRowCount(rows: MultiCheckRowResult[]): number {
+  return rows.filter(r => !isRegisterSummaryRow(r)).length;
+}
+
+// Same idea as realRowCount above, but for a standalone text-pair check's
+// flat findings list (SingleCheckHistoryList) rather than a file check's
+// per-language rows — a history entry that only ran "register" carries
+// exactly one register_summary finding and no real ones, and must show
+// "без проблем", not "1 найдено".
+export function realFindingCount(findings: Finding[]): number {
+  return findings.filter(f => f.type !== "register_summary").length;
+}
 
 // Turns a two-letter region code ("KZ") into its flag emoji by combining the
 // two Unicode "regional indicator symbol" characters — this works for any
@@ -65,12 +95,13 @@ export function flagForLang(code: string): string {
   if (BASE_LANG_FALLBACK[base]) return BASE_LANG_FALLBACK[base];
   // A bare code with no region part at all, and not one of the common
   // languages above, is very likely one of the agency's country-code-style
-  // labels (the real Tone doc names Kazakh "KZ", Tajik "TJ", Bengali "BD" —
-  // the COUNTRY code, not the ISO language subtag). Since removing the
-  // Numerals document (which used to carry the real "kk-KZ"-style codes and
-  // let merge_lang_codes bridge "kz" into it) took away that bridging, a
-  // bare label like this now reaches here as-is — try it directly as a
-  // region code before giving up, since for these it already IS one.
+  // labels (Александр's own files name Kazakh "KZ", Tajik "TJ", Bengali
+  // "BD" — the COUNTRY code, not the ISO language subtag). Since removing
+  // the Numerals document (which used to carry the real "kk-KZ"-style
+  // codes and let merge_lang_codes bridge "kz" into it) took away that
+  // bridging, a bare label like this now reaches here as-is — try it
+  // directly as a region code before giving up, since for these it
+  // already IS one.
   if (parts.length === 1) {
     const flag = regionFlag(base);
     if (flag) return flag;
@@ -98,13 +129,6 @@ export const CHECK_OPTIONS: { key: string; label: string; kind: "ai" | "algo" }[
   { key: "punctuation", label: "Оформление (алгоритм)", kind: "algo" },
   { key: "placeholders", label: "Теги/плейсхолдеры (алгоритм)", kind: "algo" },
 ];
-
-// Which uploaded doc (if any) a check requires — mirrors the backend's
-// _require_doc, so the UI can warn before the user even presses start
-// rather than only after a 400 comes back.
-export const CHECK_DOC_REQUIREMENT: Record<string, "tone"> = {
-  register: "tone",
-};
 
 // Expands the user's checkbox selection into the actual list sent to the
 // backend — folds in the two free rule checks that aren't shown as their
@@ -139,6 +163,13 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 // wrong — the AI's response got cut off, or a batch request errored — so
 // it needs a label that reads as "something's off with the check", not as
 // a translation problem type.
+//
+// "register_summary" — the other synthetic type the backend can inject
+// (the tone-of-address actually used, per app.claude_client.
+// summarize_register_values) — isn't in this map at all: its message is
+// already self-explanatory ("Тон обращения: везде на «вы»."), so
+// CheckRunner renders it plainly, without a severity or type badge (see
+// the "finding-info" CSS class), instead of looking it up here.
 export const TYPE_LABEL: Record<string, string> = { system: "⚠ Внимание" };
 
 // Standard Russian count-noun pluralization (1 минута, 2 минуты, 5 минут,

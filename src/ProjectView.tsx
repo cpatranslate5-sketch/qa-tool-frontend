@@ -1,93 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   addCatalogLanguage,
   deleteCatalogLanguage,
   deleteProject,
-  getToneStatus,
   knownLanguages,
-  uploadTone,
 } from "./api";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { flagForLang } from "./lang";
-import type { Manager, Project, ToneStatus } from "./types";
+import type { Manager, Project } from "./types";
 
-type DocKind = "tone";
-
-const DOC_META: Record<DocKind, { title: string; hint: string }> = {
-  tone: {
-    title: "Тон обращения",
-    hint: "Колонка на каждый язык, регистр обращения (ты/вы и т.п.).",
-  },
-};
-
-function DocCard({
-  kind,
-  isAdmin,
-  status,
-  onUploaded,
-}: {
-  kind: DocKind;
-  isAdmin: boolean;
-  status: { filename: string; uploaded_at: string | null; count: number } | null;
-  onUploaded: (file: File) => Promise<void>;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-  const meta = DOC_META[kind];
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const file = fileRef.current?.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setSaved(false);
-    setError("");
-    try {
-      await onUploaded(file);
-      setSaved(true);
-      if (fileRef.current) fileRef.current.value = "";
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  return (
-    <div className="doc-section">
-      <label>{meta.title}</label>
-      {status && status.count > 0 ? (
-        <div className="doc-readonly">
-          📄 {status.filename} — {status.count} языков
-          {status.uploaded_at && (
-            <span className="muted small"> (загружен {new Date(status.uploaded_at).toLocaleString("ru-RU")})</span>
-          )}
-        </div>
-      ) : (
-        <div className="doc-readonly"><span className="muted">не загружен</span></div>
-      )}
-
-      {isAdmin && (
-        <form className="inline-form" onSubmit={submit}>
-          <input ref={fileRef} type="file" accept=".xlsx" />
-          <button type="submit" disabled={uploading}>{uploading ? "Загружаю…" : "Загрузить"}</button>
-          {saved && <span className="muted small"> Сохранено.</span>}
-        </form>
-      )}
-      {error && <div className="error-box">{error}</div>}
-      <p className="muted small">{meta.hint} Загрузка полностью заменяет предыдущий файл.</p>
-    </div>
-  );
-}
-
-// The project's manually-curated "which languages do I check here" list —
-// fully separate from the Тон обращения document above (that's about
-// register content; this is about catalog membership). Александр asked
-// for this list to change ONLY when he explicitly adds or removes a
-// language here — never as a side effect of uploading anything, tone
-// document or checked file alike.
+// The project's manually-curated "which languages do I check here" list.
+// Александр asked for this list to change ONLY when he explicitly adds or
+// removes a language here — never as a side effect of uploading a file to
+// check.
 function LanguageCatalogSection({
   isAdmin,
   languages,
@@ -136,7 +61,7 @@ function LanguageCatalogSection({
       <h2>Языки проекта</h2>
       <p className="muted small">
         Список языков, которые вы проверяете в этом проекте. Меняется только вручную — загрузка файла на
-        проверку или документа «Тон обращения» на него не влияет.
+        проверку на него не влияет.
       </p>
 
       {languages === null && <p className="muted small">Загрузка…</p>}
@@ -196,7 +121,6 @@ export default function ProjectView({
   onProjectDeleted: () => void;
   onBack: () => void;
 }) {
-  const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
   const [catalogLangs, setCatalogLangs] = useState<string[] | null>(null);
   const [error, setError] = useState("");
 
@@ -206,7 +130,6 @@ export default function ProjectView({
   const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
-    getToneStatus(project.id).then(setToneStatus).catch(() => {});
     knownLanguages(project.id).then(r => setCatalogLangs(r.languages)).catch(() => setCatalogLangs([]));
   }, [project.id]);
 
@@ -252,18 +175,6 @@ export default function ProjectView({
       />
 
       <section>
-        <h2>Документы проекта</h2>
-        <div className="doc-grid">
-          <DocCard
-            kind="tone"
-            isAdmin={manager.is_admin}
-            status={toneStatus ? { filename: toneStatus.filename, uploaded_at: toneStatus.uploaded_at, count: toneStatus.rule_count } : null}
-            onUploaded={async file => setToneStatus(await uploadTone(manager.id, project.id, file))}
-          />
-        </div>
-      </section>
-
-      <section>
         <button className="start-check-button" onClick={() => onOpenCheck()}>Начать проверку →</button>
       </section>
 
@@ -283,7 +194,7 @@ export default function ProjectView({
         <div className="modal-overlay" onClick={() => setShowDelete(false)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <h2>Удалить проект «{project.name}»?</h2>
-            <p className="muted small">Это действие необратимо: все документы и история проверок проекта будут удалены. Подтвердите свой пароль.</p>
+            <p className="muted small">Это действие необратимо: список языков и вся история проверок проекта будут удалены. Подтвердите свой пароль.</p>
             <form onSubmit={submitDelete}>
               <label>Ваш пароль</label>
               <input value={deleteCode} onChange={e => setDeleteCode(e.target.value)} type="password" autoFocus />

@@ -88,6 +88,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 .finding-type { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; }
 .finding-message { margin-top: 4px; }
 
+/* A register (tone-of-address) report line — what tone was actually used,
+   not a problem someone needs to fix — so it's styled as plain information
+   (accent-colored border, no severity/type badges) rather than a warning. */
+.finding-info { border-left-color: var(--accent); }
+
 /* --- layout / navigation --- */
 .top-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
 .top-bar h1 { margin-bottom: 0; }
@@ -196,23 +201,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .multi-card { display: block; margin-top: 4px; }
 
-.doc-section { margin-bottom: 8px; }
-.doc-section button { margin-top: 10px; }
-.doc-readonly {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-  font-size: 0.88rem;
-  color: var(--muted-2);
-  white-space: pre-wrap;
-}
-.doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 10px 0 20px; }
-
-/* The actual languages stored in a project document (e.g. Тон обращения),
-   shown as removable chips so a leftover/wrong entry — like one carried
-   over from "copy from an existing project" — can be spotted and dropped
-   without touching the rest of the document. */
+/* Removable chips: the project's language catalog (ProjectView.tsx) and a
+   language's taught alias spellings (LanguageAliases.tsx) — so a
+   leftover/wrong entry can be spotted and dropped individually. */
 .doc-lang-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .doc-lang-chip {
   display: flex; align-items: center; gap: 5px;

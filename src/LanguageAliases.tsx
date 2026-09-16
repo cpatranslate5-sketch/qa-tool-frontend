@@ -6,8 +6,8 @@ import type { LanguageAlias, Manager } from "./types";
 // Александр's global spelling dictionary (his own idea, approved after he
 // asked for an opinion first): any manager teaches "this raw spelling means
 // this language" once here, and it's recognized everywhere from then on — a
-// file's own column header, the Tone-of-address document, a manually-typed
-// catalog addition (see app.excel_multi._label_to_code on the backend).
+// file's own column header, a manually-typed catalog addition (see
+// app.excel_multi._label_to_code on the backend).
 //
 // Deliberately global (not per-project) and open to every folder, not just
 // admin — matches the backend's non-admin-gated design: a wrong or

@@ -7,15 +7,7 @@ export interface Manager {
 export interface Project {
   id: number;
   name: string;
-  tone_filename: string;
-  tone_uploaded_at: string | null;
   created_by_name: string;
-}
-
-export interface ToneStatus {
-  filename: string;
-  uploaded_at: string | null;
-  rule_count: number;
 }
 
 // One taught spelling in the global language-alias dictionary — see

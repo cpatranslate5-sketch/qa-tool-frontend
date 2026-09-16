@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  deleteMultiCheck, detectFileLanguages, getToneStatus,
+  deleteMultiCheck, detectFileLanguages,
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
-import { buildChecksToSend, CHECK_DOC_REQUIREMENT, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { buildChecksToSend, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import type {
   Finding, Manager, MultiCheckResponse,
-  Project, ToneStatus,
+  Project,
 } from "./types";
 
 const SOURCE_LANGS = [
@@ -19,6 +19,26 @@ const SOURCE_LANGS = [
 
 function baseLang(code: string): string {
   return code.split("-")[0].toLowerCase();
+}
+
+// A single finding, in either results list below (a text-pair check's flat
+// list, or one row of a file check). "register_summary" is not a problem
+// the model found — it's the tone-of-address actually used (see
+// app.claude_client.summarize_register_values) — so it's shown as a plain
+// info line, its message already reading e.g. "Тон обращения: везде на
+// «вы».", with no severity/type badges that would make it look like
+// something to fix.
+function FindingRow({ f }: { f: Finding }) {
+  if (f.type === "register_summary") {
+    return <div className="finding finding-info">{f.message}</div>;
+  }
+  return (
+    <div className={`finding finding-${f.severity}`}>
+      <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
+      <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
+      <div className="finding-message">{f.message}</div>
+    </div>
+  );
 }
 
 export default function CheckRunner({
@@ -112,9 +132,6 @@ export default function CheckRunner({
   // by unticking it.
   const [urgent, setUrgent] = useState(true);
 
-  // --- doc status, for the missing-document warning ---
-  const [toneStatus, setToneStatus] = useState<ToneStatus | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [findings, setFindings] = useState<Finding[] | null>(null);
@@ -145,7 +162,6 @@ export default function CheckRunner({
 
   useEffect(() => {
     knownLanguages(project.id).then(r => setAllLangs(r.languages)).catch(() => setAllLangs([]));
-    getToneStatus(project.id).then(setToneStatus).catch(() => {});
   }, [project.id, manager.id]);
 
   // reset target-language choices whenever the source language changes, since
@@ -295,16 +311,6 @@ export default function CheckRunner({
     setTargetLangsMulti(prev => (prev.length === targetCandidates.length ? [] : [...targetCandidates]));
   }
 
-  const docStatusByRequirement: Record<string, { filename: string } | null> = {
-    tone: toneStatus && toneStatus.rule_count > 0 ? toneStatus : null,
-  };
-  const DOC_LABEL: Record<string, string> = { tone: "Тон обращения" };
-  const missingDocsForSelected = [...new Set(
-    checks
-      .map(c => CHECK_DOC_REQUIREMENT[c])
-      .filter((doc): doc is "tone" => !!doc && !docStatusByRequirement[doc])
-  )];
-
   const hasText = sourceText.trim() && translationText.trim();
   const hasFile = !!fileName;
   const targetsChosen = mode === "text" ? !!targetLangSingle : targetLangsMulti.length > 0;
@@ -313,7 +319,6 @@ export default function CheckRunner({
     (mode === "text" ? !!hasText : hasFile) &&
     targetsChosen &&
     checks.length > 0 &&
-    missingDocsForSelected.length === 0 &&
     // File mode only: the manager must explicitly confirm every ticked
     // language was actually found in the file (see "Подтвердить выбор
     // языков" above) before a check can run — text mode has no file to
@@ -416,7 +421,7 @@ export default function CheckRunner({
   multiResult?.sheets?.forEach(sheet => {
     sheet.languages_checked.forEach(lang => {
       const rows = sheet.languages[lang] || [];
-      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + rows.length;
+      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + realRowCount(rows);
     });
   });
   const elapsedMinutes = multiResult?.created_at
@@ -594,12 +599,6 @@ export default function CheckRunner({
             </label>
           ))}
         </div>
-        {missingDocsForSelected.length > 0 && (
-          <div className="warn-box">
-            Нельзя запустить: для выбранных критериев нужны документы проекта, которые ещё не загружены —{" "}
-            {missingDocsForSelected.map(d => `«${DOC_LABEL[d]}»`).join(", ")}. Загрузите их на странице проекта.
-          </div>
-        )}
       </div>
 
       <div className="step extra-instructions">
@@ -627,13 +626,7 @@ export default function CheckRunner({
           <h2>Результат</h2>
           <p className="muted small">Проверка завершена, стоимость составила: {formatCostRu(singleCost)}</p>
           {findings.length === 0 && <div className="muted">Проблем не найдено.</div>}
-          {findings.map((f, i) => (
-            <div key={i} className={`finding finding-${f.severity}`}>
-              <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-              <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
-              <div className="finding-message">{f.message}</div>
-            </div>
-          ))}
+          {findings.map((f, i) => <FindingRow key={i} f={f} />)}
         </div>
       )}
 
@@ -746,10 +739,11 @@ export default function CheckRunner({
 
               {sheet.languages_checked.filter(l => langFilter === "all" || l === langFilter).map(lang => {
                 const rows = sheet.languages[lang] || [];
+                const realCount = realRowCount(rows);
                 return (
                   <div key={lang} className="lang-block">
-                    <h4 className={`lang-block-title ${rows.length > 0 ? "has-findings" : ""}`}>
-                      {flagForLang(lang)} {lang} — {rows.length > 0 ? `${rows.length} найдено` : "без проблем"}
+                    <h4 className={`lang-block-title ${realCount > 0 ? "has-findings" : ""}`}>
+                      {flagForLang(lang)} {lang} — {realCount > 0 ? `${realCount} найдено` : "без проблем"}
                     </h4>
                     <div className="lang-results">
                       {rows.length === 0 && <div className="muted">Проблем не найдено.</div>}
@@ -760,13 +754,7 @@ export default function CheckRunner({
                             <div><strong>Источник:</strong> {row.source}</div>
                             <div><strong>Перевод:</strong> {row.translation}</div>
                           </div>
-                          {row.findings.map((f, fi) => (
-                            <div key={fi} className={`finding finding-${f.severity}`}>
-                              <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-                              <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
-                              <div className="finding-message">{f.message}</div>
-                            </div>
-                          ))}
+                          {row.findings.map((f, fi) => <FindingRow key={fi} f={f} />)}
                         </div>
                       ))}
                     </div>

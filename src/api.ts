@@ -6,7 +6,6 @@ import type {
   MultiCheckResponse,
   Project,
   SingleCheckHistoryEntry,
-  ToneStatus,
 } from "./types";
 
 export const API_URL = import.meta.env.VITE_API_URL || "https://web-production-f70ad.up.railway.app";
@@ -97,7 +96,7 @@ export function deleteProject(projectId: number, managerId: number, code: string
 // The project's manually-curated "which languages do I check here"
 // catalog — the ONLY source of the target-language checkboxes. Changes
 // only through addCatalogLanguage/deleteCatalogLanguage below, never as
-// a side effect of uploading a Tone document or a file to check.
+// a side effect of uploading a file to check.
 export function knownLanguages(projectId: number): Promise<{ languages: string[] }> {
   return request(`/projects/${projectId}/known-languages`);
 }
@@ -175,19 +174,6 @@ export function addLanguageAlias(managerId: number, alias: string, canonicalCode
 
 export function deleteLanguageAlias(aliasId: number, managerId: number): Promise<{ aliases: LanguageAlias[] }> {
   return request(`/language-aliases/${aliasId}?manager_id=${managerId}`, { method: "DELETE" });
-}
-
-// --- reference documents (tone-of-address) ---
-
-export function getToneStatus(projectId: number): Promise<ToneStatus> {
-  return request(`/projects/${projectId}/tone/status`);
-}
-
-export function uploadTone(managerId: number, projectId: number, file: File): Promise<ToneStatus> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("manager_id", String(managerId));
-  return requestForm(`/projects/${projectId}/tone/upload`, formData);
 }
 
 // --- checking: one text pair (single target language) ---

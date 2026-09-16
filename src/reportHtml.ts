@@ -5,7 +5,7 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { describeChecksRu, flagForLang, formatCostRu, formatDurationRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import type { MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
@@ -15,6 +15,24 @@ function esc(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// One finding, as HTML — mirrors CheckRunner.tsx's FindingRow: a
+// "register_summary" entry (the tone-of-address actually used, see
+// app.claude_client.summarize_register_values) is pure information, not a
+// problem the model found, so it's shown as a plain line with no severity/
+// type badge instead of going through the normal colored-severity template.
+function findingHtml(f: { type: string; severity: string; message: string }): string {
+  if (f.type === "register_summary") {
+    return `<div class="finding finding-info">${esc(f.message)}</div>`;
+  }
+  return `
+    <div class="finding finding-${esc(f.severity)}">
+      <span class="finding-severity">${esc(SEVERITY_LABEL[f.severity] || f.severity)}</span>
+      <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
+      <div class="finding-message">${esc(f.message)}</div>
+    </div>
+  `;
 }
 
 const REPORT_CSS = `
@@ -51,6 +69,7 @@ const REPORT_CSS = `
   .finding-high { border-left-color: #d64545; }
   .finding-medium { border-left-color: #d98a1f; }
   .finding-low { border-left-color: #8a93a3; }
+  .finding-info { border-left-color: #6366f1; }
   .finding-severity { font-weight: 700; margin-right: 8px; }
   .finding-type { color: #6b7280; font-size: 0.75rem; text-transform: uppercase; }
   .finding-message { margin-top: 4px; }
@@ -73,6 +92,7 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   const sheetsHtml = sheets.map(sheet => {
     const langsHtml = sheet.languages_checked.map(lang => {
       const rows = sheet.languages[lang] || [];
+      const realCount = realRowCount(rows);
       const rowsHtml = rows.length === 0
         ? `<div class="muted">Проблем не найдено.</div>`
         : rows.map(row => `
@@ -82,18 +102,12 @@ export function buildReportHtml(result: MultiCheckResponse): string {
                 <div><strong>Источник:</strong> ${esc(row.source)}</div>
                 <div><strong>Перевод:</strong> ${esc(row.translation)}</div>
               </div>
-              ${row.findings.map(f => `
-                <div class="finding finding-${esc(f.severity)}">
-                  <span class="finding-severity">${esc(SEVERITY_LABEL[f.severity] || f.severity)}</span>
-                  <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
-                  <div class="finding-message">${esc(f.message)}</div>
-                </div>
-              `).join("")}
+              ${row.findings.map(findingHtml).join("")}
             </div>
           `).join("");
       return `
         <div class="lang-block" data-lang="${esc(lang)}">
-          <h4 class="lang-block-title ${rows.length > 0 ? "has-findings" : ""}">${esc(flagForLang(lang))} ${esc(lang)} — ${rows.length > 0 ? `${rows.length} найдено` : "без проблем"}</h4>
+          <h4 class="lang-block-title ${realCount > 0 ? "has-findings" : ""}">${esc(flagForLang(lang))} ${esc(lang)} — ${realCount > 0 ? `${realCount} найдено` : "без проблем"}</h4>
           <div class="lang-results">${rowsHtml}</div>
         </div>
       `;
@@ -121,7 +135,7 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   sheets.forEach(sheet => {
     sheet.languages_checked.forEach(lang => {
       const rows = sheet.languages[lang] || [];
-      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + rows.length;
+      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + realRowCount(rows);
     });
   });
   // Language codes are attacker-reachable (they come straight from a

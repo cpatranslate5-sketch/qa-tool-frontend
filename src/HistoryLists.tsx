@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { deleteMultiCheck, deleteSingleCheck, multiCheckDetail, multiCheckHistory, singleCheckHistory } from "./api";
-import { flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realFindingCount, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { openReportInNewTab } from "./reportHtml";
 import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
 
@@ -72,7 +72,7 @@ export function SingleCheckHistoryList({
                 {new Date(h.created_at).toLocaleString("ru-RU")}
                 {h.performed_by_name ? ` — ${h.performed_by_name}` : ""}
                 {" — "}{flagForLang(h.source_lang)}→{flagForLang(h.target_lang)} {h.target_lang}
-                {" — "}{h.findings.length === 0 ? "без проблем" : `${h.findings.length} найдено`}
+                {" — "}{realFindingCount(h.findings) === 0 ? "без проблем" : `${realFindingCount(h.findings)} найдено`}
                 {" — "}{formatCostRu(h.cost_usd)}
               </button>
               <button
@@ -92,11 +92,15 @@ export function SingleCheckHistoryList({
                   <div><strong>Перевод:</strong> {h.translation}</div>
                 </div>
                 {h.findings.map((f, i) => (
-                  <div key={i} className={`finding finding-${f.severity}`}>
-                    <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
-                    <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
-                    <div className="finding-message">{f.message}</div>
-                  </div>
+                  f.type === "register_summary" ? (
+                    <div key={i} className="finding finding-info">{f.message}</div>
+                  ) : (
+                    <div key={i} className={`finding finding-${f.severity}`}>
+                      <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
+                      <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
+                      <div className="finding-message">{f.message}</div>
+                    </div>
+                  )
                 ))}
               </div>
             )}
