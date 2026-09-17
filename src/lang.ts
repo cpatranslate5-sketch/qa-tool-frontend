@@ -181,6 +181,14 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 export const TYPE_LABEL: Record<string, string> = {
   system: "⚠ Внимание",
   sms_charset: "SMS-алфавит",
+  // Unlike "register_summary" (the document-wide majority-tone report,
+  // handled specially below — see registerSummarySegments), "register_mixed"
+  // IS a genuine, ordinary finding on one specific row: that row's own
+  // translation switches between «ты» and «вы» within itself (Александр's
+  // ask, 2026-09-17 — a cell can hold several sentences/paragraphs, and the
+  // tone can drift mid-cell), so it renders through the normal severity/type
+  // badge template like any other problem, just with a friendly label here.
+  register_mixed: "Тон обращения",
 };
 
 // Colors for the register_summary majority word — Александр's ask
