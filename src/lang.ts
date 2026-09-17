@@ -259,6 +259,25 @@ export function registerSummarySegments(f: Finding): RegisterSegment[] {
   return [{ text: before }, { text: word, color }, { text: afterWord }];
 }
 
+// Matches the trailing "(также в строках: N, M, ...)" tag app.excel_multi's
+// _resolve_repeated_findings appends (always exactly this shape, always at
+// the very end — see that function) when the same problem repeats across
+// several Excel rows and gets reported once. Александр's ask (2026-09-17):
+// this tag is easy to miss buried in a long sentence, so it's split out and
+// colored red (same REGISTER_EXCEPTION_COLOR already used for a wrongly-
+// toned exception's text) instead of showing as plain, same-color text.
+const ALSO_ROWS_RE = /(\s\(также в строках: \d+(?:,\s*\d+)*\))$/;
+
+export function alsoRowsSegments(message: string): RegisterSegment[] {
+  const m = ALSO_ROWS_RE.exec(message);
+  if (!m) return [{ text: message }];
+  const idx = m.index;
+  return [
+    { text: message.slice(0, idx) },
+    { text: m[1], color: REGISTER_EXCEPTION_COLOR },
+  ];
+}
+
 // Standard Russian count-noun pluralization (1 минута, 2 минуты, 5 минут,
 // 11 минут, 21 минута, ...) — used by formatElapsedMinutesRu below.
 function pluralRu(n: number, one: string, few: string, many: string): string {

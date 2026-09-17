@@ -4,7 +4,7 @@ import {
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
-import { buildChecksToSend, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import type {
@@ -45,7 +45,11 @@ function FindingRow({ f }: { f: Finding }) {
     <div className={`finding finding-${f.severity}`}>
       <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
       <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
-      <div className="finding-message">{f.message}</div>
+      <div className="finding-message">
+        {alsoRowsSegments(f.message).map((seg, i) => (
+          <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.text}</span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -136,6 +140,22 @@ export default function CheckRunner({
   const [fileUnrecognizedCols, setFileUnrecognizedCols] = useState<string[]>([]);
   const [targetLangSingle, setTargetLangSingle] = useState("");
   const [targetLangsMulti, setTargetLangsMulti] = useState<string[]>([]);
+
+  // Bulk language-selection shortcut (file mode only) — Александр's ask
+  // (2026-09-17): with a large catalog, ticking every needed language by
+  // hand is tedious, so he can instead paste/type a list of codes (one per
+  // line, e.g. "EN\nAZ\nES\n...") and have the matching checkboxes ticked
+  // for him in one go. Deliberately just a shortcut for setting
+  // targetLangsMulti, not a parallel selection mechanism — applying the
+  // list REPLACES the current selection with exactly what's in it, and
+  // afterwards the manager can still tick/untick individual checkboxes by
+  // hand as always (his own explicit ask: "выбор вручную и корректировку
+  // выбранного по списку в ручную оставить тоже нужно"). langListUnmatched
+  // surfaces any pasted line that didn't resolve to one of the project's
+  // catalog languages (a typo, or a language not on the catalog at all),
+  // so a silently-ignored line never looks like it was applied.
+  const [langListText, setLangListText] = useState("");
+  const [langListUnmatched, setLangListUnmatched] = useState<string[]>([]);
 
   // Александр's redesign: the manager ticks the languages they expect,
   // presses "Подтвердить выбор языков", and ONLY once every ticked
@@ -366,6 +386,8 @@ export default function CheckRunner({
   async function onFileChosen(file: File | undefined) {
     setFileName(file?.name || "");
     setTargetLangsMulti([]);
+    setLangListText("");
+    setLangListUnmatched([]);
     setFileUnrecognizedCols([]);
     setFileUnknownLanguages([]);
     if (!file) {
@@ -387,6 +409,38 @@ export default function CheckRunner({
   }
   function toggleAllTargets() {
     setTargetLangsMulti(prev => (prev.length === targetCandidates.length ? [] : [...targetCandidates]));
+  }
+
+  // Resolves one pasted line to a real catalog code: an exact match first
+  // (case-insensitive — "es" / "ES" / "Es" all hit "es"), then, only if
+  // it's unambiguous, a match by base language alone (e.g. a plain "PT"
+  // resolving to the catalog's "pt-br" — but NOT if the catalog had both
+  // "pt-br" and "pt-pt", where a bare "pt" can't safely pick one on its
+  // own and is left unmatched instead of guessing).
+  function resolveLangCode(raw: string): string | null {
+    const norm = raw.trim().toLowerCase();
+    if (!norm) return null;
+    const exact = targetCandidates.find(c => c.toLowerCase() === norm);
+    if (exact) return exact;
+    const byBase = targetCandidates.filter(c => baseLang(c) === norm);
+    return byBase.length === 1 ? byBase[0] : null;
+  }
+
+  function applyLangList() {
+    const lines = langListText.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    if (lines.length === 0) return;
+    const matched: string[] = [];
+    const unmatched: string[] = [];
+    lines.forEach(line => {
+      const resolved = resolveLangCode(line);
+      if (resolved) {
+        if (!matched.includes(resolved)) matched.push(resolved);
+      } else {
+        unmatched.push(line);
+      }
+    });
+    setTargetLangsMulti(matched);
+    setLangListUnmatched(unmatched);
   }
 
   const hasText = sourceText.trim() && translationText.trim();
@@ -637,6 +691,29 @@ export default function CheckRunner({
         )}
         {sourceLang && mode === "file" && targetCandidates.length > 0 && (
           <>
+            <div className="lang-list-paste" style={{ marginBottom: 12 }}>
+              <label className="muted small" style={{ display: "block", marginBottom: 4 }}>
+                Или вставьте список кодов языков (по одному в строке) — заменит текущий выбор ниже:
+              </label>
+              <textarea
+                value={langListText}
+                onChange={e => setLangListText(e.target.value)}
+                rows={4}
+                placeholder={"EN\nAZ\nES\nFR\nKO\nPT\nTR\nUZ"}
+                style={{ width: "100%", maxWidth: 260 }}
+              />
+              <div>
+                <button type="button" className="secondary" style={{ marginTop: 6 }} onClick={applyLangList} disabled={!langListText.trim()}>
+                  Выбрать по списку
+                </button>
+              </div>
+              {langListUnmatched.length > 0 && (
+                <div className="info-box" style={{ marginTop: 6 }}>
+                  Не найдены в списке языков проекта: «{langListUnmatched.join("», «")}». Проверьте написание, либо
+                  добавьте язык в разделе «Языки проекта» на странице проекта.
+                </div>
+              )}
+            </div>
             <label className="check-chip select-all">
               <input type="checkbox" checked={targetLangsMulti.length === targetCandidates.length} onChange={toggleAllTargets} />
               Выбрать все

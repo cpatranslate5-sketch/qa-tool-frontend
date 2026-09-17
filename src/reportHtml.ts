@@ -5,7 +5,7 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import type { Finding, MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
@@ -34,11 +34,14 @@ function findingHtml(f: Finding): string {
       .join("");
     return `<div class="finding finding-info">${inner}</div>`;
   }
+  const messageInner = alsoRowsSegments(f.message)
+    .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : esc(seg.text)))
+    .join("");
   return `
     <div class="finding finding-${esc(f.severity)}">
       <span class="finding-severity">${esc(SEVERITY_LABEL[f.severity] || f.severity)}</span>
       <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
-      <div class="finding-message">${esc(f.message)}</div>
+      <div class="finding-message">${messageInner}</div>
     </div>
   `;
 }
