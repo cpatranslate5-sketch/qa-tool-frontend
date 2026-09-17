@@ -150,7 +150,7 @@ export function detectFileLanguages(
 // missing only when nothing safely matches.
 export function verifyLanguages(
   projectId: number, file: File, codes: string[]
-): Promise<{ results: { code: string; found: boolean }[] }> {
+): Promise<{ results: { code: string; found: boolean; missing_from_sheets: string[] }[] }> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("codes", codes.join(","));

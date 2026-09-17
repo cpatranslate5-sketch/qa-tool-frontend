@@ -69,13 +69,29 @@ export default function CheckRunner({
   // Mirrors the target-language "Подтвердить выбор языков" flow below, but
   // for the single source language (Александр's ask, 2026-09-17) — file
   // mode only, since text mode has no file to check the language against.
-  // Needs no backend change at all: verify-languages already takes any
-  // list of codes, so this just calls it with a one-element list.
+  //
+  // Deliberately STRICTER than the target-language confirmation: a target
+  // language is allowed to be missing from one sheet of a multi-file
+  // upload just because that sheet's content doesn't need it, but every
+  // sheet needs the ORIGINAL text — so the source language must be found
+  // on EVERY sheet, not merely somewhere in the document (Александр's own
+  // follow-up ask, 2026-09-17, after testing a file where he'd renamed
+  // "RU" on only one of two sheets — the looser "found anywhere" check
+  // correctly said "found", since it genuinely was, just not on the sheet
+  // he'd edited, which would then have silently skipped RU checking with
+  // no warning at all). See verify_file_languages' own docstring in
+  // app.main for the backend side of this — same endpoint, no new one.
   const [sourceLangConfirmed, setSourceLangConfirmed] = useState(false);
   const [confirmingSourceLang, setConfirmingSourceLang] = useState(false);
   // null = no confirm attempt yet since the last invalidation; true/false =
-  // the last attempt's actual found/not-found result.
+  // whether the last attempt found it ANYWHERE in the file at all (a plain
+  // "wrong language" case reads differently from "found, but not on every
+  // sheet" below).
   const [sourceLangFound, setSourceLangFound] = useState<boolean | null>(null);
+  // Which sheets it's missing from — non-empty only when sourceLangFound
+  // is true but sourceLangConfirmed is still false (found somewhere, just
+  // not everywhere it needs to be).
+  const [sourceLangMissingSheets, setSourceLangMissingSheets] = useState<string[]>([]);
 
   // --- step: text vs file (mutually exclusive) ---
   const [mode, setMode] = useState<"text" | "file">("text");
@@ -210,6 +226,7 @@ export default function CheckRunner({
   useEffect(() => {
     setSourceLangConfirmed(false);
     setSourceLangFound(null);
+    setSourceLangMissingSheets([]);
   }, [sourceLang, fileName]);
 
   // large multi-checks go to Anthropic's cheaper batch queue and come back
@@ -304,11 +321,18 @@ export default function CheckRunner({
     setError("");
     try {
       const r = await verifyLanguages(project.id, file, [sourceLang]);
-      const found = r.results.length > 0 && r.results.every(row => row.found);
+      const row = r.results[0];
+      const found = !!row?.found;
+      const missingSheets = row?.missing_from_sheets || [];
       setSourceLangFound(found);
-      setSourceLangConfirmed(found);
+      setSourceLangMissingSheets(missingSheets);
+      // The source language must be found on EVERY sheet, not merely
+      // somewhere in the file (see this state's own comment above) —
+      // confirmed only when it's found at all AND missing from none.
+      setSourceLangConfirmed(found && missingSheets.length === 0);
     } catch (err) {
       setSourceLangFound(null);
+      setSourceLangMissingSheets([]);
       setSourceLangConfirmed(false);
       setError(
         err instanceof Error
@@ -550,12 +574,19 @@ export default function CheckRunner({
                   {confirmingSourceLang ? "Проверяю…" : "Подтвердить выбор языка"}
                 </button>
                 {sourceLangConfirmed && (
-                  <div className="success-box">✓ Язык оригинала распознан.</div>
+                  <div className="success-box">✓ Язык оригинала распознан на всех листах файла.</div>
                 )}
                 {sourceLangFound === false && (
                   <div className="info-box">
                     Язык оригинала «{sourceLang}» не найден в файле. Проверьте, что выбран правильный язык, либо
                     переименуйте нужную колонку в файле и загрузите документ заново.
+                  </div>
+                )}
+                {sourceLangFound === true && sourceLangMissingSheets.length > 0 && (
+                  <div className="info-box">
+                    Язык оригинала «{sourceLang}» найден не на всех листах файла — отсутствует на: «
+                    {sourceLangMissingSheets.join("», «")}». Проверьте, не переименована или не удалена ли нужная
+                    колонка на этом листе (в отличие от языков перевода, оригинал обязателен на КАЖДОМ листе).
                   </div>
                 )}
               </div>
