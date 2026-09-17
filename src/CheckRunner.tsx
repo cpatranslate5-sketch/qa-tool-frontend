@@ -693,20 +693,21 @@ export default function CheckRunner({
           <>
             <div className="lang-list-paste" style={{ marginBottom: 12 }}>
               <label className="muted small" style={{ display: "block", marginBottom: 4 }}>
-                Или вставьте список кодов языков (по одному в строке) — заменит текущий выбор ниже:
+                Вставьте список языков (по одному в строке) или выберите вручную ниже.
               </label>
               <textarea
                 value={langListText}
                 onChange={e => setLangListText(e.target.value)}
-                rows={4}
-                placeholder={"EN\nAZ\nES\nFR\nKO\nPT\nTR\nUZ"}
+                rows={2}
                 style={{ width: "100%", maxWidth: 260 }}
               />
-              <div>
-                <button type="button" className="secondary" style={{ marginTop: 6 }} onClick={applyLangList} disabled={!langListText.trim()}>
-                  Выбрать по списку
-                </button>
-              </div>
+              {langListText.trim() && (
+                <div>
+                  <button type="button" className="secondary" style={{ marginTop: 6 }} onClick={applyLangList}>
+                    Выбрать языки
+                  </button>
+                </div>
+              )}
               {langListUnmatched.length > 0 && (
                 <div className="info-box" style={{ marginTop: 6 }}>
                   Не найдены в списке языков проекта: «{langListUnmatched.join("», «")}». Проверьте написание, либо
