@@ -4,7 +4,7 @@ import {
   knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
-import { buildChecksToSend, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { buildChecksToSend, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import type {
@@ -24,13 +24,22 @@ function baseLang(code: string): string {
 // A single finding, in either results list below (a text-pair check's flat
 // list, or one row of a file check). "register_summary" is not a problem
 // the model found — it's the tone-of-address actually used (see
-// app.claude_client.summarize_register_values) — so it's shown as a plain
-// info line, its message already reading e.g. "Тон обращения: везде на
-// «вы».", with no severity/type badges that would make it look like
-// something to fix.
+// app.claude_client.build_register_report) — so it's shown as a plain info
+// line with no severity/type badges that would make it look like something
+// to fix. Its majority word («вы»/«ты») is colorized (blue/orange), and,
+// when the finding carries actual exception text, each exception's real
+// wording is shown highlighted red instead of just its row number — both
+// per Александр's ask (2026-09-17); see lang.ts's registerSummarySegments.
 function FindingRow({ f }: { f: Finding }) {
   if (f.type === "register_summary") {
-    return <div className="finding finding-info">{f.message}</div>;
+    const segments = registerSummarySegments(f);
+    return (
+      <div className="finding finding-info">
+        {segments.map((seg, i) => (
+          <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.text}</span>
+        ))}
+      </div>
+    );
   }
   return (
     <div className={`finding finding-${f.severity}`}>
@@ -56,6 +65,17 @@ export default function CheckRunner({
 }) {
   // --- step 1: source language ---
   const [sourceLang, setSourceLang] = useState("");
+
+  // Mirrors the target-language "Подтвердить выбор языков" flow below, but
+  // for the single source language (Александр's ask, 2026-09-17) — file
+  // mode only, since text mode has no file to check the language against.
+  // Needs no backend change at all: verify-languages already takes any
+  // list of codes, so this just calls it with a one-element list.
+  const [sourceLangConfirmed, setSourceLangConfirmed] = useState(false);
+  const [confirmingSourceLang, setConfirmingSourceLang] = useState(false);
+  // null = no confirm attempt yet since the last invalidation; true/false =
+  // the last attempt's actual found/not-found result.
+  const [sourceLangFound, setSourceLangFound] = useState<boolean | null>(null);
 
   // --- step: text vs file (mutually exclusive) ---
   const [mode, setMode] = useState<"text" | "file">("text");
@@ -116,7 +136,11 @@ export default function CheckRunner({
   const [missingLanguages, setMissingLanguages] = useState<string[] | null>(null);
 
   // --- step 2: criteria ---
-  const [checks, setChecks] = useState<string[]>(CHECK_OPTIONS.map(c => c.key));
+  // Everything ticked by default EXCEPT a criterion explicitly marked
+  // defaultOn: false in CHECK_OPTIONS (currently just "sms_charset" — it's
+  // only relevant for an actual SMS deliverable and would otherwise flag
+  // nearly every non-Latin-only translation, so it must start unticked).
+  const [checks, setChecks] = useState<string[]>(CHECK_OPTIONS.filter(c => c.defaultOn !== false).map(c => c.key));
 
   // --- optional comment ---
   const [comment, setComment] = useState("");
@@ -180,6 +204,13 @@ export default function CheckRunner({
     setLanguagesConfirmed(false);
     setMissingLanguages(null);
   }, [targetLangsMulti, fileName]);
+
+  // Same invalidation rule as above, for the source-language confirmation:
+  // only valid for the exact file + source language it was run against.
+  useEffect(() => {
+    setSourceLangConfirmed(false);
+    setSourceLangFound(null);
+  }, [sourceLang, fileName]);
 
   // large multi-checks go to Anthropic's cheaper batch queue and come back
   // "processing" — keep quietly re-checking until it flips to "completed".
@@ -266,6 +297,29 @@ export default function CheckRunner({
     }
   }
 
+  async function confirmSourceLang() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file || !sourceLang) return;
+    setConfirmingSourceLang(true);
+    setError("");
+    try {
+      const r = await verifyLanguages(project.id, file, [sourceLang]);
+      const found = r.results.length > 0 && r.results.every(row => row.found);
+      setSourceLangFound(found);
+      setSourceLangConfirmed(found);
+    } catch (err) {
+      setSourceLangFound(null);
+      setSourceLangConfirmed(false);
+      setError(
+        err instanceof Error
+          ? `Не удалось подтвердить язык оригинала: ${err.message}`
+          : "Не удалось подтвердить язык оригинала.",
+      );
+    } finally {
+      setConfirmingSourceLang(false);
+    }
+  }
+
   // Runs detect-languages for the given file and applies the result.
   async function detectAndSetFileLanguages(file: File) {
     const token = ++fileDetectToken.current;
@@ -320,10 +374,11 @@ export default function CheckRunner({
     targetsChosen &&
     checks.length > 0 &&
     // File mode only: the manager must explicitly confirm every ticked
-    // language was actually found in the file (see "Подтвердить выбор
-    // языков" above) before a check can run — text mode has no file to
+    // target language, AND the source language itself, was actually found
+    // in the file (see "Подтвердить выбор языков"/"Подтвердить выбор
+    // языка" above) before a check can run — text mode has no file to
     // confirm against, so it's unaffected.
-    (mode === "text" || languagesConfirmed) &&
+    (mode === "text" || (languagesConfirmed && sourceLangConfirmed)) &&
     !loading;
 
   async function start() {
@@ -489,6 +544,22 @@ export default function CheckRunner({
               Обычно большой файл дешевле проверять через очередь Anthropic — до часа ожидания. Эта галочка
               пропускает очередь и считает сразу, но по полной (в 2 раза дороже) цене.
             </p>
+            {sourceLang && fileName && (
+              <div style={{ marginTop: 10 }}>
+                <button type="button" className="secondary" onClick={confirmSourceLang} disabled={confirmingSourceLang}>
+                  {confirmingSourceLang ? "Проверяю…" : "Подтвердить выбор языка"}
+                </button>
+                {sourceLangConfirmed && (
+                  <div className="success-box">✓ Язык оригинала распознан.</div>
+                )}
+                {sourceLangFound === false && (
+                  <div className="info-box">
+                    Язык оригинала «{sourceLang}» не найден в файле. Проверьте, что выбран правильный язык, либо
+                    переименуйте нужную колонку в файле и загрузите документ заново.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -615,7 +686,10 @@ export default function CheckRunner({
         {loading ? "Проверяю…" : mode === "file" ? "Начать проверку" : "Начать проверку"}
       </button>
       {!checks.length && <p className="muted small">Выберите хотя бы один критерий проверки.</p>}
-      {mode === "file" && hasFile && targetsChosen && !languagesConfirmed && (
+      {mode === "file" && hasFile && !sourceLangConfirmed && (
+        <p className="muted small">Сначала подтвердите выбор языка оригинала (кнопка выше, после загрузки файла).</p>
+      )}
+      {mode === "file" && hasFile && targetsChosen && sourceLangConfirmed && !languagesConfirmed && (
         <p className="muted small">Сначала подтвердите выбор языков (шаг 2) — кнопка выше.</p>
       )}
 

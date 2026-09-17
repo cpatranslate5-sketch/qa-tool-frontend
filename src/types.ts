@@ -26,6 +26,23 @@ export interface Finding {
   type: string;
   severity: "low" | "medium" | "high";
   message: string;
+  // Only present on a "register_summary" finding — which tone of address
+  // ("вы"/formal or "ты"/informal) is the majority across the checked text,
+  // so the UI can colorize that word (blue for formal, orange for informal)
+  // instead of just showing the plain message string.
+  register_majority?: "formal" | "informal" | null;
+  // Only present on a "register_summary" finding, and only when there are
+  // MAX_EXCEPTIONS_WITH_TEXT (3) or fewer rows that break from the majority
+  // tone — the actual translated text of each exception row, so the UI can
+  // show what was actually written (highlighted red) instead of just its
+  // row number. null/absent when there are more than 3 exceptions (see
+  // register_exception_labels below) or no exceptions at all.
+  register_exceptions?: { label: string | number; text: string }[] | null;
+  // Only present on a "register_summary" finding, and only when there are
+  // MORE than MAX_EXCEPTIONS_WITH_TEXT (3) exception rows — falls back to
+  // just the row numbers/labels (the old plain-text behavior), since
+  // listing every exception's full text would be unwieldy past that point.
+  register_exception_labels?: (string | number)[] | null;
 }
 
 export interface SingleCheckHistoryEntry {

@@ -5,8 +5,8 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
-import type { MultiCheckResponse } from "./types";
+import { describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import type { Finding, MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
   return String(s ?? "")
@@ -19,12 +19,20 @@ function esc(s: string): string {
 
 // One finding, as HTML — mirrors CheckRunner.tsx's FindingRow: a
 // "register_summary" entry (the tone-of-address actually used, see
-// app.claude_client.summarize_register_values) is pure information, not a
+// app.claude_client.build_register_report) is pure information, not a
 // problem the model found, so it's shown as a plain line with no severity/
-// type badge instead of going through the normal colored-severity template.
-function findingHtml(f: { type: string; severity: string; message: string }): string {
+// type badge instead of going through the normal colored-severity
+// template. Its majority word («вы»/«ты») is colorized (blue/orange), and,
+// when the finding carries actual exception text, each exception's real
+// wording is shown highlighted red instead of just its row number — both
+// per Александр's ask (2026-09-17); see lang.ts's registerSummarySegments.
+function findingHtml(f: Finding): string {
   if (f.type === "register_summary") {
-    return `<div class="finding finding-info">${esc(f.message)}</div>`;
+    const segments = registerSummarySegments(f);
+    const inner = segments
+      .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : esc(seg.text)))
+      .join("");
+    return `<div class="finding finding-info">${inner}</div>`;
   }
   return `
     <div class="finding finding-${esc(f.severity)}">

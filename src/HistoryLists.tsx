@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { deleteMultiCheck, deleteSingleCheck, multiCheckDetail, multiCheckHistory, singleCheckHistory } from "./api";
-import { flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realFindingCount, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realFindingCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { openReportInNewTab } from "./reportHtml";
 import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
 
@@ -13,6 +13,67 @@ import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry 
 // screen needing to know anything about history. `refreshSignal` — bump it
 // (any changing number) to make either list re-fetch, e.g. right after a
 // new check finishes running.
+
+// A register_summary finding's message rendered as colored segments (see
+// lang.ts's registerSummarySegments — «вы»/«ты» colorized, and an
+// exception's actual text highlighted red instead of just its row number,
+// per Александр's ask, 2026-09-17). Shared by both lists' inline finding
+// rendering below.
+function RegisterSummaryLine({ message, register_majority, register_exceptions, register_exception_labels }: {
+  message: string;
+  register_majority?: "formal" | "informal" | null;
+  register_exceptions?: { label: string | number; text: string }[] | null;
+  register_exception_labels?: (string | number)[] | null;
+}) {
+  const segments = registerSummarySegments({
+    type: "register_summary",
+    severity: "low",
+    message,
+    register_majority,
+    register_exceptions,
+    register_exception_labels,
+  });
+  return (
+    <div className="finding finding-info">
+      {segments.map((seg, i) => (
+        <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.text}</span>
+      ))}
+    </div>
+  );
+}
+
+// Both delete-confirmation dialogs below (single entry, and "Удалить все")
+// used to be a raw window.confirm() — Александр accidentally hit Chrome's
+// own "prevent this page from creating additional dialogs" checkbox that
+// browsers offer after a page pops several confirm()s in a row, which
+// silently makes EVERY later confirm() on that page auto-return false with
+// no dialog shown at all — that's why deleting appeared to just stop
+// working with no error. A plain in-app modal (mirroring ProjectView's
+// existing delete-project modal) has no such browser-level opt-out button
+// to accidentally hit, and also happens to satisfy Александр's explicit
+// ask ("подтверждение... но без кнопки 'Больше не спрашивать'") since it
+// simply has no such button at all.
+function ConfirmModal({ title, body, confirmLabel, busy, onConfirm, onCancel }: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-box" onClick={e => e.stopPropagation()}>
+        <h2>{title}</h2>
+        <p className="muted small">{body}</p>
+        <div className="modal-actions">
+          <button type="button" className="secondary" onClick={onCancel} disabled={busy}>Отмена</button>
+          <button type="button" onClick={onConfirm} disabled={busy}>{busy ? "Удаляю…" : confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function SingleCheckHistoryList({
   manager,
@@ -28,15 +89,17 @@ export function SingleCheckHistoryList({
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  // What the confirmation modal is currently asking about — a single entry
+  // by id, "all" for the bulk "Удалить все" action, or null when the modal
+  // is closed. Only one modal can be open at a time for this list.
+  const [confirmTarget, setConfirmTarget] = useState<number | "all" | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     singleCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
   }, [project.id, manager.id, refreshSignal]);
 
-  async function handleDelete(e: MouseEvent, id: number) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!window.confirm("Удалить эту проверку из истории? Отменить будет нельзя.")) return;
+  async function performDelete(id: number) {
     setDeletingId(id);
     setError("");
     try {
@@ -47,7 +110,39 @@ export function SingleCheckHistoryList({
       setError("Не удалось удалить эту проверку.");
     } finally {
       setDeletingId(null);
+      setConfirmTarget(null);
     }
+  }
+
+  // Deletes every entry currently in the list, one at a time — there's no
+  // dedicated bulk-delete endpoint on the backend, so this just calls the
+  // same per-entry delete Александр already had, in a loop (a manager's own
+  // history is never huge enough for this to matter).
+  async function performDeleteAll() {
+    setBulkDeleting(true);
+    setError("");
+    const ids = history.map(h => h.id);
+    const succeeded: number[] = [];
+    for (const id of ids) {
+      try {
+        await deleteSingleCheck(project.id, id, manager.id);
+        succeeded.push(id);
+      } catch {
+        /* left in the list below — still exists on the backend */
+      }
+    }
+    setHistory(prev => prev.filter(h => !succeeded.includes(h.id)));
+    setExpandedId(null);
+    const failed = ids.length - succeeded.length;
+    if (failed > 0) setError(`Не удалось удалить ${failed} из ${ids.length} проверок.`);
+    setBulkDeleting(false);
+    setConfirmTarget(null);
+  }
+
+  function handleDeleteClick(e: MouseEvent, id: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    setConfirmTarget(id);
   }
 
   if (history.length === 0) return null;
@@ -56,7 +151,16 @@ export function SingleCheckHistoryList({
     <div className="history">
       <div className="history-header" onClick={() => setCollapsed(c => !c)}>
         <h2>История точечных проверок ({history.length})</h2>
-        <span className="collapse-toggle">{collapsed ? "▸ Показать" : "▾ Скрыть"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <button
+            type="button"
+            className="link-button danger-link"
+            onClick={e => { e.stopPropagation(); setConfirmTarget("all"); }}
+          >
+            Удалить все
+          </button>
+          <span className="collapse-toggle">{collapsed ? "▸ Показать" : "▾ Скрыть"}</span>
+        </div>
       </div>
       {error && <div className="error-box">{error}</div>}
       {!collapsed && history.map(h => {
@@ -80,7 +184,7 @@ export function SingleCheckHistoryList({
                 className="history-delete-button"
                 title="Удалить эту проверку"
                 disabled={deletingId === h.id}
-                onClick={e => handleDelete(e, h.id)}
+                onClick={e => handleDeleteClick(e, h.id)}
               >
                 ✕
               </button>
@@ -93,7 +197,13 @@ export function SingleCheckHistoryList({
                 </div>
                 {h.findings.map((f, i) => (
                   f.type === "register_summary" ? (
-                    <div key={i} className="finding finding-info">{f.message}</div>
+                    <RegisterSummaryLine
+                      key={i}
+                      message={f.message}
+                      register_majority={f.register_majority}
+                      register_exceptions={f.register_exceptions}
+                      register_exception_labels={f.register_exception_labels}
+                    />
                   ) : (
                     <div key={i} className={`finding finding-${f.severity}`}>
                       <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
@@ -107,6 +217,26 @@ export function SingleCheckHistoryList({
           </div>
         );
       })}
+      {confirmTarget !== null && confirmTarget !== "all" && (
+        <ConfirmModal
+          title="Удалить эту проверку?"
+          body="Она будет удалена из истории. Отменить будет нельзя."
+          confirmLabel="Удалить"
+          busy={deletingId === confirmTarget}
+          onConfirm={() => performDelete(confirmTarget)}
+          onCancel={() => setConfirmTarget(null)}
+        />
+      )}
+      {confirmTarget === "all" && (
+        <ConfirmModal
+          title="Удалить всю историю точечных проверок?"
+          body={`Будет удалено ${history.length} проверок. Отменить будет нельзя.`}
+          confirmLabel="Удалить все"
+          busy={bulkDeleting}
+          onConfirm={performDeleteAll}
+          onCancel={() => setConfirmTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -144,6 +274,10 @@ export function MultiCheckHistoryList({
   const [collapsed, setCollapsed] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  // Same idea as SingleCheckHistoryList's confirmTarget — a single entry's
+  // id, "all" for the bulk action, or null when no modal is open.
+  const [confirmTarget, setConfirmTarget] = useState<number | "all" | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     multiCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
@@ -166,12 +300,7 @@ export function MultiCheckHistoryList({
   // about. The confirmation wording says "отменить" for those, since
   // "удалить" would read as if there were already a finished report to
   // lose, when there isn't yet.
-  async function handleDelete(e: MouseEvent, h: MultiCheckHistoryEntry) {
-    e.stopPropagation();
-    const confirmMsg = h.status === "processing"
-      ? "Отменить эту проверку? Она ещё обрабатывается — отмена остановит её и уберёт из истории. Отменить это действие будет нельзя."
-      : "Удалить эту проверку из истории? Отменить будет нельзя.";
-    if (!window.confirm(confirmMsg)) return;
+  async function performDelete(h: MultiCheckHistoryEntry) {
     setDeletingId(h.id);
     setError("");
     try {
@@ -182,7 +311,32 @@ export function MultiCheckHistoryList({
       setError(h.status === "processing" ? "Не удалось отменить эту проверку." : "Не удалось удалить эту проверку.");
     } finally {
       setDeletingId(null);
+      setConfirmTarget(null);
     }
+  }
+
+  // Same loop-over-existing-delete approach as SingleCheckHistoryList's
+  // bulk action — also cancels whatever's still processing along the way,
+  // same as deleting one of those individually already does.
+  async function performDeleteAll() {
+    setBulkDeleting(true);
+    setError("");
+    const ids = history.map(h => h.id);
+    const succeeded: number[] = [];
+    for (const h of history) {
+      try {
+        await deleteMultiCheck(project.id, h.id, manager.id);
+        succeeded.push(h.id);
+        onDeleted?.(h.id);
+      } catch {
+        /* left in the list below — still exists on the backend */
+      }
+    }
+    setHistory(prev => prev.filter(h => !succeeded.includes(h.id)));
+    const failed = ids.length - succeeded.length;
+    if (failed > 0) setError(`Не удалось удалить/отменить ${failed} из ${ids.length} проверок.`);
+    setBulkDeleting(false);
+    setConfirmTarget(null);
   }
 
   // A finished report opens on its own page (Александр's ask: reports
@@ -204,11 +358,22 @@ export function MultiCheckHistoryList({
 
   if (history.length === 0) return null;
 
+  const confirmEntry = typeof confirmTarget === "number" ? history.find(h => h.id === confirmTarget) : null;
+
   return (
     <div className="history">
       <div className="history-header" onClick={() => setCollapsed(c => !c)}>
         <h2>История загрузок документов ({history.length})</h2>
-        <span className="collapse-toggle">{collapsed ? "▸ Показать" : "▾ Скрыть"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <button
+            type="button"
+            className="link-button danger-link"
+            onClick={e => { e.stopPropagation(); setConfirmTarget("all"); }}
+          >
+            Удалить все
+          </button>
+          <span className="collapse-toggle">{collapsed ? "▸ Показать" : "▾ Скрыть"}</span>
+        </div>
       </div>
       {error && <div className="error-box">{error}</div>}
       {!collapsed && history.map(h => (
@@ -243,12 +408,36 @@ export function MultiCheckHistoryList({
             className="history-delete-button"
             title={h.status === "processing" ? "Отменить эту проверку" : "Удалить эту проверку"}
             disabled={deletingId === h.id}
-            onClick={e => handleDelete(e, h)}
+            onClick={e => { e.stopPropagation(); setConfirmTarget(h.id); }}
           >
             ✕
           </button>
         </div>
       ))}
+      {confirmEntry && (
+        <ConfirmModal
+          title={confirmEntry.status === "processing" ? "Отменить эту проверку?" : "Удалить эту проверку?"}
+          body={
+            confirmEntry.status === "processing"
+              ? "Она ещё обрабатывается — отмена остановит её и уберёт из истории. Отменить это действие будет нельзя."
+              : "Она будет удалена из истории. Отменить будет нельзя."
+          }
+          confirmLabel={confirmEntry.status === "processing" ? "Отменить" : "Удалить"}
+          busy={deletingId === confirmEntry.id}
+          onConfirm={() => performDelete(confirmEntry)}
+          onCancel={() => setConfirmTarget(null)}
+        />
+      )}
+      {confirmTarget === "all" && (
+        <ConfirmModal
+          title="Удалить всю историю загрузок?"
+          body={`Будет удалено (и отменено, если что-то ещё обрабатывается) ${history.length} загрузок. Отменить будет нельзя.`}
+          confirmLabel="Удалить все"
+          busy={bulkDeleting}
+          onConfirm={performDeleteAll}
+          onCancel={() => setConfirmTarget(null)}
+        />
+      )}
     </div>
   );
 }

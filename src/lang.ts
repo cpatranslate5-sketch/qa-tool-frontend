@@ -121,13 +121,21 @@ export function langLabel(code: string): string {
 // folded silently into "Оформление" / always-on respectively (see
 // CheckRunner's buildChecksToSend) rather than dropped — they're free and
 // already useful, no reason to lose them over a labeling choice.
-export const CHECK_OPTIONS: { key: string; label: string; kind: "ai" | "algo" }[] = [
+// "defaultOn: false" marks a criterion that must stay UNTICKED unless the
+// manager deliberately turns it on for a given check — right now only the
+// SMS/GSM-7bit charset check (Александр's ask, 2026-09-17): it's only
+// relevant for an actual SMS deliverable, and would otherwise flag nearly
+// every non-Latin-only translation (Cyrillic, Arabic, CJK, ...) as "wrong",
+// so it must never be on by default the way every other criterion is. See
+// CheckRunner's initial `checks` state, which reads this flag.
+export const CHECK_OPTIONS: { key: string; label: string; kind: "ai" | "algo"; defaultOn?: boolean }[] = [
   { key: "register", label: "Тон обращения (ИИ)", kind: "ai" },
   { key: "untranslatable", label: "Непереводимые термины (ИИ)", kind: "ai" },
   { key: "completeness", label: "Неполнота перевода, лишний текст (ИИ)", kind: "ai" },
   { key: "typo", label: "Опечатки и ошибки (ИИ)", kind: "ai" },
   { key: "punctuation", label: "Оформление (алгоритм)", kind: "algo" },
   { key: "placeholders", label: "Теги/плейсхолдеры (алгоритм)", kind: "algo" },
+  { key: "sms_charset", label: "Латиница для SMS, GSM 7-bit (алгоритм)", kind: "algo", defaultOn: false },
 ];
 
 // Expands the user's checkbox selection into the actual list sent to the
@@ -170,7 +178,78 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 // already self-explanatory ("Тон обращения: везде на «вы»."), so
 // CheckRunner renders it plainly, without a severity or type badge (see
 // the "finding-info" CSS class), instead of looking it up here.
-export const TYPE_LABEL: Record<string, string> = { system: "⚠ Внимание" };
+export const TYPE_LABEL: Record<string, string> = {
+  system: "⚠ Внимание",
+  sms_charset: "SMS-алфавит",
+};
+
+// Colors for the register_summary majority word — Александр's ask
+// (2026-09-17): «вы» (formal) in blue, «ты» (informal) in orange.
+const REGISTER_WORD_COLOR: Record<string, string> = {
+  formal: "#4C6FCE",
+  informal: "#E08A2E",
+};
+
+// Highlight color for an exception row's actual (wrongly-toned) text —
+// matches the app's --danger red already used elsewhere for real problems,
+// repeated here as a literal since this module has no access to CSS
+// custom properties.
+const REGISTER_EXCEPTION_COLOR = "#C1503A";
+
+export interface RegisterSegment {
+  text: string;
+  color?: string;
+}
+
+// Splits a register_summary finding's message into colored segments for
+// CheckRunner/HistoryLists (on-screen) and reportHtml.ts (the downloadable
+// report) to render consistently — Александр's ask (2026-09-17): color the
+// majority word («вы» blue / «ты» orange), and, when the finding carries
+// each exception's actual translated text (register_exceptions — capped at
+// MAX_EXCEPTIONS_WITH_TEXT on the backend), show that text highlighted red
+// INSTEAD of the plain row-number list, closing the sentence with a period.
+//
+// Deliberately colors the word actually found inside f.message (rather
+// than rebuilding the sentence from scratch) — the backend's exact Russian
+// phrasing differs between a single-pair check ("на «вы».") and a
+// multi-row file check ("везде на «вы», кроме: ...."), and there's no flag
+// on the finding itself saying which one this is, so locating the known
+// word/phrase inside the real message and only swapping what's needed
+// (the row-number tail, when actual exception text is available) stays
+// correct either way instead of guessing at which framing to reconstruct.
+//
+// Falls back to the whole message as one plain, uncolored segment for an
+// older history record saved before this structure existed (no
+// register_majority field at all) and for the "couldn't determine — no
+// direct address in the text" case (majority is null).
+export function registerSummarySegments(f: Finding): RegisterSegment[] {
+  const majority = f.register_majority;
+  if (!majority) return [{ text: f.message }];
+
+  const color = REGISTER_WORD_COLOR[majority];
+  const word = majority === "formal" ? "«вы»" : "«ты»";
+  const idx = f.message.indexOf(word);
+  if (idx === -1) return [{ text: f.message }];
+
+  const before = f.message.slice(0, idx);
+  const afterWord = f.message.slice(idx + word.length);
+
+  const exceptions = f.register_exceptions;
+  if (exceptions && exceptions.length > 0) {
+    const kromeMarker = "кроме: ";
+    const kromeIdx = afterWord.indexOf(kromeMarker);
+    const prefix = kromeIdx === -1 ? afterWord : afterWord.slice(0, kromeIdx + kromeMarker.length);
+    const segs: RegisterSegment[] = [{ text: before }, { text: word, color }, { text: prefix }];
+    exceptions.forEach((exc, i) => {
+      if (i > 0) segs.push({ text: "; " });
+      segs.push({ text: exc.text, color: REGISTER_EXCEPTION_COLOR });
+    });
+    segs.push({ text: "." });
+    return segs;
+  }
+
+  return [{ text: before }, { text: word, color }, { text: afterWord }];
+}
 
 // Standard Russian count-noun pluralization (1 минута, 2 минуты, 5 минут,
 // 11 минут, 21 минута, ...) — used by formatElapsedMinutesRu below.
