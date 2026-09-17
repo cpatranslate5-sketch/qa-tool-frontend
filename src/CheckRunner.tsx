@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   deleteMultiCheck, detectFileLanguages,
-  knownLanguages, multiCheck, multiCheckDetail, multiCheckReportUrl,
+  knownLanguages, listLanguageAliases, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
 import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
@@ -224,6 +224,28 @@ export default function CheckRunner({
     knownLanguages(project.id).then(r => setAllLangs(r.languages)).catch(() => setAllLangs([]));
   }, [project.id, manager.id]);
 
+  // The global "Словарь языков" dictionary (see LanguageAliases.tsx/
+  // models.LanguageAlias) — {alias (lowercase) -> canonical_code}. Fetched
+  // once on mount (it's global/project-independent, unlike allLangs above,
+  // which refetches per project) and consulted by resolveLangCode below so
+  // the bulk language-list paste box (step 2) recognizes a raw label from
+  // Александр's own exported table (e.g. "ZA" for Swahili, "MD" for
+  // Romanian) exactly the same way file-column detection already does —
+  // it used to only check the pasted line against the project's own
+  // catalog codes directly, so a taught alias had no effect there at all
+  // and every one of those lines came back "не найдены в списке языков
+  // проекта" even after being taught in the dictionary.
+  const [aliasMap, setAliasMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    listLanguageAliases()
+      .then(r => {
+        const map: Record<string, string> = {};
+        r.aliases.forEach(a => { map[a.alias.toLowerCase()] = a.canonical_code; });
+        setAliasMap(map);
+      })
+      .catch(() => setAliasMap({}));
+  }, []);
+
   // reset target-language choices whenever the source language changes, since
   // the exclusion rule (source can't also be a target) depends on it
   useEffect(() => {
@@ -411,17 +433,32 @@ export default function CheckRunner({
     setTargetLangsMulti(prev => (prev.length === targetCandidates.length ? [] : [...targetCandidates]));
   }
 
-  // Resolves one pasted line to a real catalog code: an exact match first
-  // (case-insensitive — "es" / "ES" / "Es" all hit "es"), then, only if
-  // it's unambiguous, a match by base language alone (e.g. a plain "PT"
-  // resolving to the catalog's "pt-br" — but NOT if the catalog had both
-  // "pt-br" and "pt-pt", where a bare "pt" can't safely pick one on its
-  // own and is left unmatched instead of guessing).
+  // Resolves one pasted line to a real catalog code, in three steps:
+  // (1) an exact match against the catalog first (case-insensitive — "es"
+  // / "ES" / "Es" all hit "es"); (2) the global "Словарь языков" dictionary
+  // (aliasMap — see LanguageAliases.tsx), the SAME lookup file-column
+  // detection already uses, so a spelling taught there (e.g. "ZA" for
+  // Swahili, "MD" for Romanian — a client's own export uses different
+  // labels than this project's catalog) is recognized here too, not just
+  // when parsing an uploaded file; (3) only if still unmatched, a match by
+  // base language alone (e.g. a plain "PT" resolving to the catalog's
+  // "pt-br" — but NOT if the catalog had both "pt-br" and "pt-pt", where a
+  // bare "pt" can't safely pick one on its own and is left unmatched
+  // instead of guessing). A taught alias that resolves to a code with
+  // several catalog variants goes through the same unambiguous-base-match
+  // rule as step 3, rather than guessing between them either.
   function resolveLangCode(raw: string): string | null {
     const norm = raw.trim().toLowerCase();
     if (!norm) return null;
     const exact = targetCandidates.find(c => c.toLowerCase() === norm);
     if (exact) return exact;
+    const aliasHit = aliasMap[norm];
+    if (aliasHit) {
+      const aliasExact = targetCandidates.find(c => c.toLowerCase() === aliasHit.toLowerCase());
+      if (aliasExact) return aliasExact;
+      const aliasByBase = targetCandidates.filter(c => baseLang(c) === baseLang(aliasHit));
+      if (aliasByBase.length === 1) return aliasByBase[0];
+    }
     const byBase = targetCandidates.filter(c => baseLang(c) === norm);
     return byBase.length === 1 ? byBase[0] : null;
   }
