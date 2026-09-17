@@ -12,6 +12,21 @@
   --warning: #E8A23D;
   --success: #4FAE6B;
   --low-severity: #8B78F2;
+  /* Checkboxes (and any radio/range input, if one's ever added) are plain
+     native browser controls — nothing here draws them by hand — so
+     without this they render using whatever color/shape the visitor's
+     own browser and OS default to, which is why the SAME checkbox looked
+     like a blue box with a white tick for Александр and a plain white
+     box with a black tick for someone else opening the same page on a
+     different device/browser (Александр's ask, 2026-09-17). `accent-color`
+     is the standard, one-line way to make every native form control use
+     this site's own blue instead of the visitor's system default, in
+     every modern browser (Chrome/Edge/Firefox/Safari) — and it inherits
+     from here down to every checkbox on the site automatically, so a
+     checkbox added later needs no extra styling to match. It also
+     already tracks --accent's own light/dark swap below, so both themes
+     stay correct without a second declaration. */
+  accent-color: var(--accent);
 }
 [data-theme="light"] {
   --bg: #F3F4F8;
