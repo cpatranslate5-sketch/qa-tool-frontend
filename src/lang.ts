@@ -175,9 +175,10 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 // "register_summary" — the other synthetic type the backend can inject
 // (the tone-of-address actually used, per app.claude_client.
 // summarize_register_values) — isn't in this map at all: its message is
-// already self-explanatory ("Тон обращения: везде на «вы»."), so
-// CheckRunner renders it plainly, without a severity or type badge (see
-// the "finding-info" CSS class), instead of looking it up here.
+// already self-explanatory ("Тон: Вы." — shortened from "Тон обращения:
+// везде на «вы»." on 2026-09-18), so CheckRunner renders it plainly,
+// without a severity or type badge (see the "finding-info" CSS class),
+// instead of looking it up here.
 export const TYPE_LABEL: Record<string, string> = {
   system: "⚠ Внимание",
   sms_charset: "SMS-алфавит",
@@ -219,23 +220,26 @@ export interface RegisterSegment {
 //
 // Deliberately colors the word actually found inside f.message (rather
 // than rebuilding the sentence from scratch) — the backend's exact Russian
-// phrasing differs between a single-pair check ("на «вы».") and a
-// multi-row file check ("везде на «вы», кроме: ...."), and there's no flag
-// on the finding itself saying which one this is, so locating the known
-// word/phrase inside the real message and only swapping what's needed
-// (the row-number tail, when actual exception text is available) stays
-// correct either way instead of guessing at which framing to reconstruct.
+// phrasing differs between a single-pair check ("Тон: Вы.") and a
+// multi-row file check ("Тон: Вы, кроме: строка 3." — shortened on
+// 2026-09-18 from the old "Тон обращения: везде на «вы», кроме: ....";
+// the backend now returns the bare word with no guillemets, capitalized
+// "Вы" for formal), and there's no flag on the finding itself saying which
+// framing this is, so locating the known word/phrase inside the real
+// message and only swapping what's needed (the row-number tail, when
+// actual exception text is available) stays correct either way instead of
+// guessing at which framing to reconstruct.
 //
 // Falls back to the whole message as one plain, uncolored segment for an
 // older history record saved before this structure existed (no
-// register_majority field at all) and for the "couldn't determine — no
-// direct address in the text" case (majority is null).
+// register_majority field at all) and for the (now-impossible, but kept as
+// a safe fallback) case of a majority word not actually found in the text.
 export function registerSummarySegments(f: Finding): RegisterSegment[] {
   const majority = f.register_majority;
   if (!majority) return [{ text: f.message }];
 
   const color = REGISTER_WORD_COLOR[majority];
-  const word = majority === "formal" ? "«вы»" : "«ты»";
+  const word = majority === "formal" ? "Вы" : "ты";
   const idx = f.message.indexOf(word);
   if (idx === -1) return [{ text: f.message }];
 
