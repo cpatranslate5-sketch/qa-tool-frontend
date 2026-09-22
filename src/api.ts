@@ -244,7 +244,13 @@ export function multiCheck(
   // the report as 🔬-marked findings (see CheckRunner.tsx's own comment and
   // the backend's calibration_debug). Also forces the instant path, like
   // urgent — a debug comparison shouldn't sit in the hour-long queue.
-  calibrationDebug = false
+  calibrationDebug = false,
+  // "🌐 Проверить также через Gemini" — runs every language's AI pass ALSO
+  // through Google Gemini (same prompt, different provider) and adds
+  // whatever it additionally catches as 🌐-marked, real/counted findings
+  // (see CheckRunner.tsx's own comment and the backend's gemini_check).
+  // Also forces the instant path, like urgent/calibrationDebug.
+  geminiCheck = false
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -256,6 +262,7 @@ export function multiCheck(
   formData.append("target_langs", targetLangs.join(","));
   if (urgent) formData.append("urgent", "true");
   if (calibrationDebug) formData.append("calibration_debug", "true");
+  if (geminiCheck) formData.append("gemini_check", "true");
   return requestForm(`/projects/${projectId}/multi-check`, formData);
 }
 

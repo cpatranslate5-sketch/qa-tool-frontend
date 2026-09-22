@@ -41,10 +41,15 @@ function FindingRow({ f }: { f: Finding }) {
       </div>
     );
   }
+  const debugTitle = f.calibration_debug
+    ? "Тестовая находка со сниженным порогом уверенности — не обычный результат"
+    : f.gemini_check
+    ? "Найдено через Gemini (вторая нейросеть), не через основную проверку Claude"
+    : undefined;
   return (
     <div
-      className={`finding finding-${f.severity}${f.calibration_debug ? " finding-calibration-debug" : ""}`}
-      title={f.calibration_debug ? "Тестовая находка со сниженным порогом уверенности — не обычный результат" : undefined}
+      className={`finding finding-${f.severity}${f.calibration_debug ? " finding-calibration-debug" : ""}${f.gemini_check ? " finding-gemini-check" : ""}`}
+      title={debugTitle}
     >
       <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
       <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
@@ -217,6 +222,21 @@ export default function CheckRunner({
   // roughly doubles this one run's AI cost, and is meant for a deliberate
   // one-off comparison, not routine checking.
   const [calibrationDebug, setCalibrationDebug] = useState(false);
+
+  // "🌐 Проверить также через Gemini" — Александр's ask, 2026-09-22, after
+  // a blind test (same source/translation pairs, no hints) showed Google's
+  // Gemini independently caught a real Marathi meaning error that our own
+  // model missed even with a loosened confidence bar, while correctly
+  // staying silent on a genuinely-fine control example — real evidence a
+  // second model provider catches things ours structurally can't. Sends
+  // the SAME prompt to Gemini for every checked language (his choice — not
+  // just "hard" ones); its findings are tagged/prefixed with 🌐 but ARE
+  // counted as real findings (unlike calibrationDebug's test-only ones),
+  // since he wants them treated as genuine, actionable results — just
+  // clearly marked by which engine found them while trust in Gemini is
+  // still being built. Off by default: needs GEMINI_API_KEY configured on
+  // the backend, and roughly doubles this run's AI cost.
+  const [geminiCheck, setGeminiCheck] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -551,7 +571,7 @@ export default function CheckRunner({
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
-        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent, calibrationDebug);
+        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent, calibrationDebug, geminiCheck);
         setMultiResult(res);
         setMultiHistorySignal(s => s + 1);
       }
@@ -697,6 +717,16 @@ export default function CheckRunner({
               уверенности ИИ — те находки, что нашлись только во втором проходе, попадут в отчёт с пометкой
               🔬 рядом с обычными результатами. Нужно, чтобы понять: пропуски — это предел модели или слишком
               строгая настройка. Не для обычной работы — только для разовой проверки.
+            </p>
+            <label className="check-chip" style={{ marginTop: 4 }}>
+              <input type="checkbox" checked={geminiCheck} onChange={e => setGeminiCheck(e.target.checked)} />
+              🌐 Проверить также через Gemini (вторая нейросеть, дороже примерно в 2 раза)
+            </label>
+            <p className="muted small">
+              Каждый проверяемый язык дополнительно проверяется через Gemini (Google) — те находки, что
+              нашла только она, попадут в отчёт с пометкой 🌐 и войдут в общий счётчик проблем, как обычные
+              находки. По тесту на реальных примерах Gemini независимо ловит смысловые ошибки, которые наша
+              модель пропускает — особенно на редких языках вроде кыргызского и маратхи.
             </p>
             {sourceLang && fileName && (
               <div style={{ marginTop: 10 }}>
@@ -972,6 +1002,14 @@ export default function CheckRunner({
               {formatCostRu(multiResult.summary.calibration_debug_cost_usd || 0)} (уже включена в общую стоимость
               выше). Эти находки отмечены 🔬 в списке ниже — это не обычный результат, а сравнение для отладки,
               не входит в счётчик «N проблем».
+            </p>
+          )}
+          {multiResult.summary.gemini_findings !== undefined && (
+            <p className="muted small">
+              🌐 Gemini дополнительно нашла: {multiResult.summary.gemini_findings}. Стоимость этой проверки:{" "}
+              {formatCostRu(multiResult.summary.gemini_cost_usd || 0)} (уже включена в общую стоимость выше).
+              Эти находки отмечены 🌐 в списке ниже и уже учтены в счётчике «N проблем» выше — как обычные,
+              настоящие находки, просто от другой нейросети.
             </p>
           )}
           {unrecognized.length > 0 && (

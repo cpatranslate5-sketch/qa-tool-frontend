@@ -117,6 +117,16 @@ button:disabled { opacity: 0.5; cursor: default; }
   background: color-mix(in srgb, var(--panel) 85%, var(--accent) 15%);
 }
 
+/* A "🌐 Проверить также через Gemini" finding (see CheckRunner.tsx's
+   geminiCheck) — a solid but distinctly-colored left border (not dashed,
+   since unlike a calibration_debug finding this IS a real result the
+   manager should act on, just from a different engine) plus a light tint,
+   on top of the 🌐 marker already in the message text. */
+.finding-gemini-check {
+  border-left-color: #4285f4;
+  background: color-mix(in srgb, var(--panel) 90%, #4285f4 10%);
+}
+
 /* --- layout / navigation --- */
 .top-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
 .top-bar h1 { margin-bottom: 0; }
