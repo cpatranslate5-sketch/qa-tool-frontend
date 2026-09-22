@@ -43,6 +43,11 @@ export interface Finding {
   // just the row numbers/labels (the old plain-text behavior), since
   // listing every exception's full text would be unwieldy past that point.
   register_exception_labels?: (string | number)[] | null;
+  // Only present on a finding produced by the "🔬 Тест калибровки" debug
+  // pass (see CheckRunner.tsx) — the same finding also carries a "🔬 [Тест: …]"
+  // prefix in its own message, so this is mainly for the UI to style these
+  // distinctly (e.g. a dashed border) if it wants to, not the only signal.
+  calibration_debug?: boolean;
 }
 
 export interface SingleCheckHistoryEntry {
@@ -81,6 +86,13 @@ export interface MultiCheckSummary {
   rows_checked: number;
   languages_checked: string[];
   total_findings: number;
+  // Only present when this run had "🔬 Тест калибровки" checked — how much
+  // of the run's total cost_usd came specifically from the extra, relaxed-
+  // calibration debug pass (see api.ts's multiCheck calibrationDebug param).
+  calibration_debug_cost_usd?: number;
+  // Same condition — how many of the findings in this run's sheets are
+  // 🔬 debug-pass-only findings (already excluded from total_findings above).
+  calibration_debug_findings?: number;
 }
 
 export interface MultiCheckResponse {

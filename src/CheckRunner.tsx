@@ -42,7 +42,10 @@ function FindingRow({ f }: { f: Finding }) {
     );
   }
   return (
-    <div className={`finding finding-${f.severity}`}>
+    <div
+      className={`finding finding-${f.severity}${f.calibration_debug ? " finding-calibration-debug" : ""}`}
+      title={f.calibration_debug ? "Тестовая находка со сниженным порогом уверенности — не обычный результат" : undefined}
+    >
       <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
       <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
       <div className="finding-message">
@@ -138,6 +141,15 @@ export default function CheckRunner({
   // typo'd code, an unusual spelling) can be caught and fixed BEFORE an
   // AI-backed check runs, not after it's already been paid for.
   const [fileUnrecognizedCols, setFileUnrecognizedCols] = useState<string[]>([]);
+  // A language code assigned to 2+ columns in the file (e.g. two columns
+  // both headed "ru") — only one of them can actually be used per row, so
+  // this is a real ambiguity, not a cosmetic quirk. Shown here (before any
+  // check runs) for the same "catch it before it's paid for" reason as
+  // fileUnrecognizedCols/fileUnknownLanguages above; the same ambiguity is
+  // ALSO flagged after a check runs (a "⚠ Внимание" system finding), in
+  // case it's missed here — caught live on Александр's real file
+  // (2026-09-22): a duplicated "ru" header doubled his findings for ru.
+  const [fileDuplicateLanguages, setFileDuplicateLanguages] = useState<Record<string, string[]>>({});
   const [targetLangSingle, setTargetLangSingle] = useState("");
   const [targetLangsMulti, setTargetLangsMulti] = useState<string[]>([]);
 
@@ -193,6 +205,18 @@ export default function CheckRunner({
   // genuinely needs an instant result for a big upload still ticks it
   // by hand.
   const [urgent, setUrgent] = useState(false);
+
+  // "🔬 Тест калибровки" — Александр's ask, 2026-09-22: an opt-in debug
+  // comparison that runs every checked language's AI pass a SECOND time
+  // with a loosened confidence bar (same model, same rows — see backend's
+  // calibration_debug/CALIBRATION_RELAXED_OPENING), so any extra finding
+  // that pass catches shows up right in the report, clearly marked with
+  // 🔬, next to the normal result — to see whether real-world misses come
+  // from the model's own limits or from the "only if confident" bar
+  // filtering out a correct-but-uncertain finding. Off by default: it
+  // roughly doubles this one run's AI cost, and is meant for a deliberate
+  // one-off comparison, not routine checking.
+  const [calibrationDebug, setCalibrationDebug] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -398,10 +422,12 @@ export default function CheckRunner({
       setFileLangs(r.languages);
       setFileUnknownLanguages(r.unknown_languages || []);
       setFileUnrecognizedCols(r.unrecognized_columns || []);
+      setFileDuplicateLanguages(r.duplicate_languages || {});
     } catch {
       if (token !== fileDetectToken.current) return;
       setFileLangs(null);
       setFileUnknownLanguages([]);
+      setFileDuplicateLanguages({});
     } finally {
       if (token === fileDetectToken.current) setFileLangsLoading(false);
     }
@@ -414,6 +440,7 @@ export default function CheckRunner({
     setLangListUnmatched([]);
     setFileUnrecognizedCols([]);
     setFileUnknownLanguages([]);
+    setFileDuplicateLanguages({});
     if (!file) {
       setFileLangs(null);
       fileDetectToken.current++; // invalidate any detection still in flight
@@ -524,7 +551,7 @@ export default function CheckRunner({
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
-        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent);
+        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent, calibrationDebug);
         setMultiResult(res);
         setMultiHistorySignal(s => s + 1);
       }
@@ -661,6 +688,16 @@ export default function CheckRunner({
               Обычно большой файл дешевле проверять через очередь Anthropic — до часа ожидания. Эта галочка
               пропускает очередь и считает сразу, но по полной (в 2 раза дороже) цене.
             </p>
+            <label className="check-chip" style={{ marginTop: 4 }}>
+              <input type="checkbox" checked={calibrationDebug} onChange={e => setCalibrationDebug(e.target.checked)} />
+              🔬 Тест калибровки (сравнить со сниженным порогом уверенности, дороже примерно в 2 раза)
+            </label>
+            <p className="muted small">
+              Тестовый режим для отладки: каждый проверяемый язык проверяется ещё раз с ослабленным порогом
+              уверенности ИИ — те находки, что нашлись только во втором проходе, попадут в отчёт с пометкой
+              🔬 рядом с обычными результатами. Нужно, чтобы понять: пропуски — это предел модели или слишком
+              строгая настройка. Не для обычной работы — только для разовой проверки.
+            </p>
             {sourceLang && fileName && (
               <div style={{ marginTop: 10 }}>
                 <button type="button" className="secondary" onClick={confirmSourceLang} disabled={confirmingSourceLang}>
@@ -723,6 +760,23 @@ export default function CheckRunner({
                   В файле найдена колонка «{code.toUpperCase()}», похожая на язык, но её нет в вашем списке
                   языков. Если это опечатка — переименуйте колонку в файле. Если это новый язык — добавьте его
                   вручную в разделе «Языки проекта» на странице проекта.
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {sourceLang && mode === "file" && Object.keys(fileDuplicateLanguages).length > 0 && (
+          <div className="warn-box">
+            {Object.entries(fileDuplicateLanguages).map(([code, locations]) => (
+              <div key={code} style={{ marginBottom: 6 }}>
+                <span>
+                  В файле несколько колонок с одинаковым языковым кодом «{code.toUpperCase()}»
+                  {code === sourceLang ? " — это ваш ИСХОДНЫЙ язык, так что это влияет на проверку сразу всех " +
+                    "языков перевода" : ""}
+                  {": "}
+                  {locations.join("; ")}. Платформа не может определить, какая колонка правильная — будет
+                  использована самая правая, а остальные проигнорированы. Проверьте, пожалуйста, структуру файла
+                  — возможно, одна из этих колонок лишняя или названа неправильно.
                 </span>
               </div>
             ))}
@@ -911,6 +965,15 @@ export default function CheckRunner({
             {durationText && <> Заняла: {durationText}.</>}
             {criteriaText && <> Критерии: {criteriaText}.</>}
           </p>
+          {multiResult.summary.calibration_debug_findings !== undefined && (
+            <p className="muted small">
+              🔬 Тест калибровки (второй, ослабленный проход) дополнительно нашёл:{" "}
+              {multiResult.summary.calibration_debug_findings}. Стоимость этого прохода:{" "}
+              {formatCostRu(multiResult.summary.calibration_debug_cost_usd || 0)} (уже включена в общую стоимость
+              выше). Эти находки отмечены 🔬 в списке ниже — это не обычный результат, а сравнение для отладки,
+              не входит в счётчик «N проблем».
+            </p>
+          )}
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
           )}

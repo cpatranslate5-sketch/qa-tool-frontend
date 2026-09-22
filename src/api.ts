@@ -128,13 +128,23 @@ export function deleteCatalogLanguage(projectId: number, managerId: number, lang
 //   add the language to the catalog (if it's genuinely new).
 // - unrecognized_columns: header text parse_workbook couldn't recognize
 //   as a language at all (or as Context/Max length/a known meta column).
-// All surfaced before the manager presses "start", so any of the three
+// - duplicate_languages: a language code assigned to 2+ columns in the
+//   file (e.g. two columns both headed "ru") — {code: ["Sheet: C, AA"]}.
+//   Only one column's data can actually be used per row, so this is a
+//   real ambiguity the manager should resolve, not a cosmetic quirk —
+//   caught live on Александр's real file (2026-09-22).
+// All surfaced before the manager presses "start", so any of these
 // situations can be caught and fixed up front rather than only noticed
 // afterward, by which point an AI-backed check may already have run
 // without ever covering the language that needed it.
 export function detectFileLanguages(
   projectId: number, file: File
-): Promise<{ languages: string[]; unknown_languages: string[]; unrecognized_columns: string[] }> {
+): Promise<{
+  languages: string[];
+  unknown_languages: string[];
+  unrecognized_columns: string[];
+  duplicate_languages: Record<string, string[]>;
+}> {
   const formData = new FormData();
   formData.append("file", file);
   return requestForm(`/projects/${projectId}/multi-check/detect-languages`, formData);
@@ -228,7 +238,13 @@ export function multiCheck(
   targetLangs: string[],
   // "Срочно" — forces the instant (2x price) path instead of Anthropic's
   // cheaper but up-to-an-hour batch queue, for a large upload that can't wait.
-  urgent = false
+  urgent = false,
+  // "🔬 Тест калибровки" — runs every language's AI pass a second time with
+  // a loosened confidence bar and adds whatever it additionally catches to
+  // the report as 🔬-marked findings (see CheckRunner.tsx's own comment and
+  // the backend's calibration_debug). Also forces the instant path, like
+  // urgent — a debug comparison shouldn't sit in the hour-long queue.
+  calibrationDebug = false
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -239,6 +255,7 @@ export function multiCheck(
   formData.append("extra_instructions", extraInstructions);
   formData.append("target_langs", targetLangs.join(","));
   if (urgent) formData.append("urgent", "true");
+  if (calibrationDebug) formData.append("calibration_debug", "true");
   return requestForm(`/projects/${projectId}/multi-check`, formData);
 }
 

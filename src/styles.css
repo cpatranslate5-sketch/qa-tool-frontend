@@ -108,6 +108,15 @@ button:disabled { opacity: 0.5; cursor: default; }
    (accent-colored border, no severity/type badges) rather than a warning. */
 .finding-info { border-left-color: var(--accent); }
 
+/* A "🔬 Тест калибровки" debug-pass finding (see CheckRunner.tsx's
+   calibrationDebug) — dashed border and a light background tint so it
+   reads as "test result, not the normal check" at a glance, on top of the
+   🔬 marker already in its own message text. */
+.finding-calibration-debug {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--panel) 85%, var(--accent) 15%);
+}
+
 /* --- layout / navigation --- */
 .top-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
 .top-bar h1 { margin-bottom: 0; }
