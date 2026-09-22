@@ -239,17 +239,11 @@ export function multiCheck(
   // "Срочно" — forces the instant (2x price) path instead of Anthropic's
   // cheaper but up-to-an-hour batch queue, for a large upload that can't wait.
   urgent = false,
-  // "🔬 Тест калибровки" — runs every language's AI pass a second time with
-  // a loosened confidence bar and adds whatever it additionally catches to
-  // the report as 🔬-marked findings (see CheckRunner.tsx's own comment and
-  // the backend's calibration_debug). Also forces the instant path, like
-  // urgent — a debug comparison shouldn't sit in the hour-long queue.
-  calibrationDebug = false,
   // "🌐 Проверить также через Gemini" — runs every language's AI pass ALSO
   // through Google Gemini (same prompt, different provider) and adds
   // whatever it additionally catches as 🌐-marked, real/counted findings
   // (see CheckRunner.tsx's own comment and the backend's gemini_check).
-  // Also forces the instant path, like urgent/calibrationDebug.
+  // Also forces the instant path, like urgent.
   geminiCheck = false
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
@@ -261,7 +255,6 @@ export function multiCheck(
   formData.append("extra_instructions", extraInstructions);
   formData.append("target_langs", targetLangs.join(","));
   if (urgent) formData.append("urgent", "true");
-  if (calibrationDebug) formData.append("calibration_debug", "true");
   if (geminiCheck) formData.append("gemini_check", "true");
   return requestForm(`/projects/${projectId}/multi-check`, formData);
 }

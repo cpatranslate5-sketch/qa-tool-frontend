@@ -182,6 +182,12 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 export const TYPE_LABEL: Record<string, string> = {
   system: "⚠ Внимание",
   sms_charset: "SMS-алфавит",
+  // "other" is a genuine finding the AI flagged as a real, serious problem
+  // that didn't fit any of the checks actually selected (see
+  // app.claude_client.OTHER_TYPE / _OTHER_TYPE_INSTRUCTION on the backend) —
+  // Александр's ask, 2026-09-23, so such findings surface instead of being
+  // silently dropped or forced into the wrong category.
+  other: "Другое",
   // Unlike "register_summary" (the document-wide majority-tone report,
   // handled specially below — see registerSummarySegments), "register_mixed"
   // IS a genuine, ordinary finding on one specific row: that row's own

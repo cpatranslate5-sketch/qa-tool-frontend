@@ -108,20 +108,10 @@ button:disabled { opacity: 0.5; cursor: default; }
    (accent-colored border, no severity/type badges) rather than a warning. */
 .finding-info { border-left-color: var(--accent); }
 
-/* A "🔬 Тест калибровки" debug-pass finding (see CheckRunner.tsx's
-   calibrationDebug) — dashed border and a light background tint so it
-   reads as "test result, not the normal check" at a glance, on top of the
-   🔬 marker already in its own message text. */
-.finding-calibration-debug {
-  border-style: dashed;
-  background: color-mix(in srgb, var(--panel) 85%, var(--accent) 15%);
-}
-
 /* A "🌐 Проверить также через Gemini" finding (see CheckRunner.tsx's
-   geminiCheck) — a solid but distinctly-colored left border (not dashed,
-   since unlike a calibration_debug finding this IS a real result the
-   manager should act on, just from a different engine) plus a light tint,
-   on top of the 🌐 marker already in the message text. */
+   geminiCheck) — a solid, distinctly-colored left border plus a light
+   tint, on top of the 🌐 marker already in the message text; this IS a
+   real result the manager should act on, just from a different engine. */
 .finding-gemini-check {
   border-left-color: #4285f4;
   background: color-mix(in srgb, var(--panel) 90%, #4285f4 10%);

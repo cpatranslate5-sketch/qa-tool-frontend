@@ -43,16 +43,11 @@ export interface Finding {
   // just the row numbers/labels (the old plain-text behavior), since
   // listing every exception's full text would be unwieldy past that point.
   register_exception_labels?: (string | number)[] | null;
-  // Only present on a finding produced by the "🔬 Тест калибровки" debug
-  // pass (see CheckRunner.tsx) — the same finding also carries a "🔬 [Тест: …]"
-  // prefix in its own message, so this is mainly for the UI to style these
-  // distinctly (e.g. a dashed border) if it wants to, not the only signal.
-  calibration_debug?: boolean;
   // Only present on a finding produced by the "🌐 Проверить также через
   // Gemini" pass (see CheckRunner.tsx) — the message also carries a
-  // "🌐 [Gemini] " prefix. Unlike calibration_debug, this finding IS
-  // counted as a real, actionable result (see total_findings below) —
-  // this flag is only about styling/attribution, not "ignore this".
+  // "🌐 [Gemini] " prefix. This finding IS counted as a real, actionable
+  // result (see total_findings below) — this flag is only about
+  // styling/attribution, not "ignore this".
   gemini_check?: boolean;
 }
 
@@ -92,21 +87,13 @@ export interface MultiCheckSummary {
   rows_checked: number;
   languages_checked: string[];
   total_findings: number;
-  // Only present when this run had "🔬 Тест калибровки" checked — how much
-  // of the run's total cost_usd came specifically from the extra, relaxed-
-  // calibration debug pass (see api.ts's multiCheck calibrationDebug param).
-  calibration_debug_cost_usd?: number;
-  // Same condition — how many of the findings in this run's sheets are
-  // 🔬 debug-pass-only findings (already excluded from total_findings above).
-  calibration_debug_findings?: number;
   // Only present when this run had "🌐 Проверить также через Gemini"
   // checked — how much of the run's total cost_usd came from the Gemini
   // pass (see api.ts's multiCheck geminiCheck param).
   gemini_cost_usd?: number;
-  // Same condition — how many findings came from Gemini. Unlike
-  // calibration_debug_findings, these ARE already included in
-  // total_findings above (Gemini findings are real/actionable), so this is
-  // purely an informational breakdown, not a subtraction.
+  // Same condition — how many findings came from Gemini. These ARE already
+  // included in total_findings above (Gemini findings are real/actionable),
+  // so this is purely an informational breakdown, not a subtraction.
   gemini_findings?: number;
 }
 

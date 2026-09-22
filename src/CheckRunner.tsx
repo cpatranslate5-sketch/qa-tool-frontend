@@ -41,14 +41,12 @@ function FindingRow({ f }: { f: Finding }) {
       </div>
     );
   }
-  const debugTitle = f.calibration_debug
-    ? "Тестовая находка со сниженным порогом уверенности — не обычный результат"
-    : f.gemini_check
+  const debugTitle = f.gemini_check
     ? "Найдено через Gemini (вторая нейросеть), не через основную проверку Claude"
     : undefined;
   return (
     <div
-      className={`finding finding-${f.severity}${f.calibration_debug ? " finding-calibration-debug" : ""}${f.gemini_check ? " finding-gemini-check" : ""}`}
+      className={`finding finding-${f.severity}${f.gemini_check ? " finding-gemini-check" : ""}`}
       title={debugTitle}
     >
       <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
@@ -211,31 +209,18 @@ export default function CheckRunner({
   // by hand.
   const [urgent, setUrgent] = useState(false);
 
-  // "🔬 Тест калибровки" — Александр's ask, 2026-09-22: an opt-in debug
-  // comparison that runs every checked language's AI pass a SECOND time
-  // with a loosened confidence bar (same model, same rows — see backend's
-  // calibration_debug/CALIBRATION_RELAXED_OPENING), so any extra finding
-  // that pass catches shows up right in the report, clearly marked with
-  // 🔬, next to the normal result — to see whether real-world misses come
-  // from the model's own limits or from the "only if confident" bar
-  // filtering out a correct-but-uncertain finding. Off by default: it
-  // roughly doubles this one run's AI cost, and is meant for a deliberate
-  // one-off comparison, not routine checking.
-  const [calibrationDebug, setCalibrationDebug] = useState(false);
-
   // "🌐 Проверить также через Gemini" — Александр's ask, 2026-09-22, after
   // a blind test (same source/translation pairs, no hints) showed Google's
   // Gemini independently caught a real Marathi meaning error that our own
-  // model missed even with a loosened confidence bar, while correctly
-  // staying silent on a genuinely-fine control example — real evidence a
-  // second model provider catches things ours structurally can't. Sends
-  // the SAME prompt to Gemini for every checked language (his choice — not
-  // just "hard" ones); its findings are tagged/prefixed with 🌐 but ARE
-  // counted as real findings (unlike calibrationDebug's test-only ones),
-  // since he wants them treated as genuine, actionable results — just
-  // clearly marked by which engine found them while trust in Gemini is
-  // still being built. Off by default: needs GEMINI_API_KEY configured on
-  // the backend, and roughly doubles this run's AI cost.
+  // model missed, while correctly staying silent on a genuinely-fine
+  // control example — real evidence a second model provider catches things
+  // ours structurally can't. Sends the SAME prompt to Gemini for every
+  // checked language (his choice — not just "hard" ones); its findings are
+  // tagged/prefixed with 🌐 and ARE counted as real findings, since he
+  // wants them treated as genuine, actionable results — just clearly
+  // marked by which engine found them while trust in Gemini is still being
+  // built. Off by default: needs GEMINI_API_KEY configured on the backend,
+  // and roughly doubles this run's AI cost.
   const [geminiCheck, setGeminiCheck] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -571,7 +556,7 @@ export default function CheckRunner({
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
-        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent, calibrationDebug, geminiCheck);
+        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent, geminiCheck);
         setMultiResult(res);
         setMultiHistorySignal(s => s + 1);
       }
@@ -707,16 +692,6 @@ export default function CheckRunner({
             <p className="muted small">
               Обычно большой файл дешевле проверять через очередь Anthropic — до часа ожидания. Эта галочка
               пропускает очередь и считает сразу, но по полной (в 2 раза дороже) цене.
-            </p>
-            <label className="check-chip" style={{ marginTop: 4 }}>
-              <input type="checkbox" checked={calibrationDebug} onChange={e => setCalibrationDebug(e.target.checked)} />
-              🔬 Тест калибровки (сравнить со сниженным порогом уверенности, дороже примерно в 2 раза)
-            </label>
-            <p className="muted small">
-              Тестовый режим для отладки: каждый проверяемый язык проверяется ещё раз с ослабленным порогом
-              уверенности ИИ — те находки, что нашлись только во втором проходе, попадут в отчёт с пометкой
-              🔬 рядом с обычными результатами. Нужно, чтобы понять: пропуски — это предел модели или слишком
-              строгая настройка. Не для обычной работы — только для разовой проверки.
             </p>
             <label className="check-chip" style={{ marginTop: 4 }}>
               <input type="checkbox" checked={geminiCheck} onChange={e => setGeminiCheck(e.target.checked)} />
@@ -995,15 +970,6 @@ export default function CheckRunner({
             {durationText && <> Заняла: {durationText}.</>}
             {criteriaText && <> Критерии: {criteriaText}.</>}
           </p>
-          {multiResult.summary.calibration_debug_findings !== undefined && (
-            <p className="muted small">
-              🔬 Тест калибровки (второй, ослабленный проход) дополнительно нашёл:{" "}
-              {multiResult.summary.calibration_debug_findings}. Стоимость этого прохода:{" "}
-              {formatCostRu(multiResult.summary.calibration_debug_cost_usd || 0)} (уже включена в общую стоимость
-              выше). Эти находки отмечены 🔬 в списке ниже — это не обычный результат, а сравнение для отладки,
-              не входит в счётчик «N проблем».
-            </p>
-          )}
           {multiResult.summary.gemini_findings !== undefined && (
             <p className="muted small">
               🌐 Gemini дополнительно нашла: {multiResult.summary.gemini_findings}. Стоимость этой проверки:{" "}
