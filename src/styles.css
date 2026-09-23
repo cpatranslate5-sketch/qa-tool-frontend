@@ -108,15 +108,6 @@ button:disabled { opacity: 0.5; cursor: default; }
    (accent-colored border, no severity/type badges) rather than a warning. */
 .finding-info { border-left-color: var(--accent); }
 
-/* A "🌐 Проверить также через Gemini" finding (see CheckRunner.tsx's
-   geminiCheck) — a solid, distinctly-colored left border plus a light
-   tint, on top of the 🌐 marker already in the message text; this IS a
-   real result the manager should act on, just from a different engine. */
-.finding-gemini-check {
-  border-left-color: #4285f4;
-  background: color-mix(in srgb, var(--panel) 90%, #4285f4 10%);
-}
-
 /* --- layout / navigation --- */
 .top-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
 .top-bar h1 { margin-bottom: 0; }

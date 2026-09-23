@@ -238,13 +238,7 @@ export function multiCheck(
   targetLangs: string[],
   // "Срочно" — forces the instant (2x price) path instead of Anthropic's
   // cheaper but up-to-an-hour batch queue, for a large upload that can't wait.
-  urgent = false,
-  // "🌐 Проверить также через Gemini" — runs every language's AI pass ALSO
-  // through Google Gemini (same prompt, different provider) and adds
-  // whatever it additionally catches as 🌐-marked, real/counted findings
-  // (see CheckRunner.tsx's own comment and the backend's gemini_check).
-  // Also forces the instant path, like urgent.
-  geminiCheck = false
+  urgent = false
 ): Promise<MultiCheckResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -255,7 +249,6 @@ export function multiCheck(
   formData.append("extra_instructions", extraInstructions);
   formData.append("target_langs", targetLangs.join(","));
   if (urgent) formData.append("urgent", "true");
-  if (geminiCheck) formData.append("gemini_check", "true");
   return requestForm(`/projects/${projectId}/multi-check`, formData);
 }
 

@@ -41,14 +41,8 @@ function FindingRow({ f }: { f: Finding }) {
       </div>
     );
   }
-  const debugTitle = f.gemini_check
-    ? "Найдено через Gemini (вторая нейросеть), не через основную проверку Claude"
-    : undefined;
   return (
-    <div
-      className={`finding finding-${f.severity}${f.gemini_check ? " finding-gemini-check" : ""}`}
-      title={debugTitle}
-    >
+    <div className={`finding finding-${f.severity}`}>
       <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
       <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
       <div className="finding-message">
@@ -208,20 +202,6 @@ export default function CheckRunner({
   // genuinely needs an instant result for a big upload still ticks it
   // by hand.
   const [urgent, setUrgent] = useState(false);
-
-  // "🌐 Проверить также через Gemini" — Александр's ask, 2026-09-22, after
-  // a blind test (same source/translation pairs, no hints) showed Google's
-  // Gemini independently caught a real Marathi meaning error that our own
-  // model missed, while correctly staying silent on a genuinely-fine
-  // control example — real evidence a second model provider catches things
-  // ours structurally can't. Sends the SAME prompt to Gemini for every
-  // checked language (his choice — not just "hard" ones); its findings are
-  // tagged/prefixed with 🌐 and ARE counted as real findings, since he
-  // wants them treated as genuine, actionable results — just clearly
-  // marked by which engine found them while trust in Gemini is still being
-  // built. Off by default: needs GEMINI_API_KEY configured on the backend,
-  // and roughly doubles this run's AI cost.
-  const [geminiCheck, setGeminiCheck] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -556,7 +536,7 @@ export default function CheckRunner({
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
-        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent, geminiCheck);
+        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent);
         setMultiResult(res);
         setMultiHistorySignal(s => s + 1);
       }
@@ -692,16 +672,6 @@ export default function CheckRunner({
             <p className="muted small">
               Обычно большой файл дешевле проверять через очередь Anthropic — до часа ожидания. Эта галочка
               пропускает очередь и считает сразу, но по полной (в 2 раза дороже) цене.
-            </p>
-            <label className="check-chip" style={{ marginTop: 4 }}>
-              <input type="checkbox" checked={geminiCheck} onChange={e => setGeminiCheck(e.target.checked)} />
-              🌐 Проверить также через Gemini (вторая нейросеть, дороже примерно в 2 раза)
-            </label>
-            <p className="muted small">
-              Каждый проверяемый язык дополнительно проверяется через Gemini (Google) — те находки, что
-              нашла только она, попадут в отчёт с пометкой 🌐 и войдут в общий счётчик проблем, как обычные
-              находки. По тесту на реальных примерах Gemini независимо ловит смысловые ошибки, которые наша
-              модель пропускает — особенно на редких языках вроде кыргызского и маратхи.
             </p>
             {sourceLang && fileName && (
               <div style={{ marginTop: 10 }}>
@@ -970,14 +940,6 @@ export default function CheckRunner({
             {durationText && <> Заняла: {durationText}.</>}
             {criteriaText && <> Критерии: {criteriaText}.</>}
           </p>
-          {multiResult.summary.gemini_findings !== undefined && (
-            <p className="muted small">
-              🌐 Gemini дополнительно нашла: {multiResult.summary.gemini_findings}. Стоимость этой проверки:{" "}
-              {formatCostRu(multiResult.summary.gemini_cost_usd || 0)} (уже включена в общую стоимость выше).
-              Эти находки отмечены 🌐 в списке ниже и уже учтены в счётчике «N проблем» выше — как обычные,
-              настоящие находки, просто от другой нейросети.
-            </p>
-          )}
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
           )}
