@@ -283,11 +283,15 @@ export function MultiCheckHistoryList({
     multiCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
   }, [project.id, manager.id, refreshSignal]);
 
-  // While anything here is still processing, keep quietly re-fetching so
-  // the percentage moves along on its own — same idea as CheckRunner's own
-  // per-check poll, just for the whole list at once.
+  // While anything here is still processing, or has finished but is still
+  // waiting on its background Sonnet+GPT second opinion (see
+  // types.ts's second_opinion_pending), keep quietly re-fetching so both
+  // move along on their own — same idea as CheckRunner's own per-check
+  // poll, just for the whole list at once. Opening a report always fetches
+  // its own fresh detail anyway (see handleOpen below), so this is only
+  // about keeping the list itself from looking stuck.
   useEffect(() => {
-    if (!autoPoll || !history.some(h => h.status === "processing")) return;
+    if (!autoPoll || !history.some(h => h.status === "processing" || h.second_opinion_pending)) return;
     const timer = setInterval(() => {
       multiCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
     }, 20000);

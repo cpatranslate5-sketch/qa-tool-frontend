@@ -247,6 +247,7 @@ export function buildReportHtml(result: MultiCheckResponse): string {
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
     ${filterBarHtml}
     ${copyBarHtml}
+    ${result.second_opinion_pending ? `<div class="info-box">Процент уверенности ИИ для находок ещё досчитывается в фоне (обычно не дольше минуты) — пока он не готов, «Отфильтровать отчёт» ничего не отсеивает. Закройте вкладку и откройте отчёт заново через минуту, чтобы увидеть отфильтрованную версию.</div>` : ""}
     <div>
       <button type="button" id="filter-toggle-btn" class="filter-toggle-btn">✅ Отфильтровать отчёт</button>
     </div>

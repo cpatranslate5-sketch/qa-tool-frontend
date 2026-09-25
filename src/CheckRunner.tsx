@@ -316,6 +316,36 @@ export default function CheckRunner({
     };
   }, [multiResult, project.id, manager.id]);
 
+  // A completed check's AI findings are shown immediately, but the
+  // automatic Sonnet+GPT "second opinion" (see types.ts's
+  // second_opinion_pending) now finishes a few seconds to half a minute
+  // later in the background — it used to run before the response was even
+  // sent, which was slow enough to sometimes cost the browser's fetch
+  // ("Failed to fetch") even though the check itself was already done and
+  // saved. Same quiet-poll pattern as the "processing" effect above, just
+  // faster (this is seconds, not up to an hour) and keyed on the pending
+  // flag instead of the whole status — once it flips to false, "Отфильтровать
+  // отчёт" has real percents to work with instead of just keeping
+  // everything (its safe fallback for a still-missing one).
+  useEffect(() => {
+    if (!multiResult || multiResult.status !== "completed" || !multiResult.second_opinion_pending) return;
+    const id = multiResult.multi_check_id;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const res = await multiCheckDetail(project.id, id, manager.id);
+        if (cancelled) return;
+        setMultiResult(res);
+      } catch {
+        /* transient — just try again next tick */
+      }
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [multiResult, project.id, manager.id]);
+
   // A plain re-render clock, ticking every 30s, purely so the elapsed-time
   // fallback below (shown while Anthropic's own done/total hasn't moved
   // yet) visibly counts up on its own instead of only changing whenever a
@@ -943,6 +973,13 @@ export default function CheckRunner({
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>
           )}
+          {multiResult.second_opinion_pending && (
+            <div className="info-box">
+              Находки уже готовы. Отдельно ещё досчитывается процент уверенности ИИ (Claude + GPT) для
+              каждой находки — обычно занимает не больше минуты; пока он не готов, «Отфильтровать отчёт»
+              показывает всё без отсеивания.
+            </div>
+          )}
           <a
             className="download-link"
             href={multiCheckReportUrl(project.id, multiResult.multi_check_id, manager.id)}
@@ -955,7 +992,7 @@ export default function CheckRunner({
             type="button"
             className="download-link"
             style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginLeft: 20 }}
-            onClick={() => openReportInNewTab(() => Promise.resolve(multiResult))}
+            onClick={() => openReportInNewTab(() => multiCheckDetail(project.id, multiResult.multi_check_id, manager.id))}
           >
             ⧉ Открыть в новой вкладке
           </button>
