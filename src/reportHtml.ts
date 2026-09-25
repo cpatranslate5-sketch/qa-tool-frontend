@@ -6,6 +6,7 @@
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
 import { alsoRowsSegments, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { buildCopyPayload } from "./copyReport";
 import type { Finding, MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
@@ -92,6 +93,13 @@ const REPORT_CSS = `
   .lang-filter-btn:hover { border-color: #6366f1; }
   .lang-filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
   .lang-filter-btn.has-findings:not(.active) { border-color: #b45309; color: #b45309; font-weight: 600; }
+  .copy-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+  .copy-btn {
+    background: #f0f1ff; border: 1px solid #c7caf7; border-radius: 999px; color: #3730a3;
+    cursor: pointer; font-size: 0.8rem; padding: 5px 12px;
+  }
+  .copy-btn:hover { border-color: #6366f1; }
+  .copy-btn.copied { background: #ecfdf3; border-color: #86e0ae; color: #17703c; }
 `;
 
 export function buildReportHtml(result: MultiCheckResponse): string {
@@ -172,6 +180,38 @@ export function buildReportHtml(result: MultiCheckResponse): string {
     </div>
   ` : "";
 
+  // "Копировать" buttons — Александр's ask (2026-09-25): each one puts a
+  // single ready-to-paste chat message on the clipboard (see copyReport.ts
+  // for the full rationale) — the numbered findings for either every
+  // checked language at once or just one, together with the fixed
+  // instructions for whatever AI model reads it. The actual payload text
+  // is computed here (not in the page's own <script>, which has no access
+  // to the typed MultiCheckResponse) and handed to the page as a plain
+  // object keyed by the same "all"/language-code values the filter bar
+  // above already uses, read back the same safe way (via .dataset, never
+  // interpolated into an inline onclick="..." string — see the filter
+  // bar's own comment on why a language code can't be trusted in a JS
+  // string context).
+  const copyKeys = allLangs.length > 1 ? ["all", ...allLangs] : allLangs;
+  const copyPayloads: Record<string, string> = {};
+  for (const key of copyKeys) {
+    copyPayloads[key] = buildCopyPayload(sheets, key);
+  }
+  const copyBarHtml = copyKeys.length > 0 ? `
+    <div class="copy-bar">
+      ${allLangs.length > 1
+        ? `<button type="button" class="copy-btn" data-copy="all">📋 Скопировать всё</button>` +
+          allLangs.map(l => `<button type="button" class="copy-btn" data-copy="${esc(l)}">📋 ${esc(flagForLang(l))} ${esc(l)}</button>`).join("")
+        : `<button type="button" class="copy-btn" data-copy="${esc(allLangs[0])}">📋 Скопировать отчёт</button>`}
+    </div>
+  ` : "";
+  // </script> inside the JSON payload (a finding's own message text, which
+  // comes straight from the AI's response) would otherwise prematurely
+  // close this inline script tag when the browser parses the raw HTML —
+  // standard escape for embedding JSON inside <script>, applied to the
+  // whole serialized blob rather than trying to sanitize each message.
+  const copyPayloadsJson = JSON.stringify(copyPayloads).replace(/</g, "\\u003c");
+
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -186,9 +226,37 @@ export function buildReportHtml(result: MultiCheckResponse): string {
     ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}${(() => { const c = describeChecksRu(result.checks_run); return c ? ` Критерии: ${esc(c)}.` : ""; })()}</p>` : ""}
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
     ${filterBarHtml}
+    ${copyBarHtml}
     ${sheetsHtml}
   </div>
   <script>
+    var COPY_PAYLOADS = ${copyPayloadsJson};
+    function copyReport(key, btn) {
+      var text = COPY_PAYLOADS[key];
+      if (text == null) return;
+      function showCopied() {
+        var original = btn.dataset.label || btn.textContent;
+        btn.dataset.label = original;
+        btn.textContent = "✅ Скопировано";
+        btn.classList.add("copied");
+        setTimeout(function () {
+          btn.textContent = original;
+          btn.classList.remove("copied");
+        }, 1500);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(showCopied, function () {
+          window.prompt("Не удалось скопировать автоматически — скопируйте вручную:", text);
+        });
+      } else {
+        window.prompt("Скопируйте текст вручную:", text);
+      }
+    }
+    document.querySelectorAll(".copy-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        copyReport(btn.dataset.copy, btn);
+      });
+    });
     // Narrows the always-visible breakdown down to one language's findings
     // — "Все" (the default, matching the active button on load) shows
     // everything, same as before this existed. Reads the target language
