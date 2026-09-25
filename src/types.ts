@@ -43,6 +43,18 @@ export interface Finding {
   // just the row numbers/labels (the old plain-text behavior), since
   // listing every exception's full text would be unwieldy past that point.
   register_exception_labels?: (string | number)[] | null;
+  // Set by the backend's automatic post-check "second opinion" pass (see
+  // app.claude_client.run_second_opinion) — 0-100 validity percent from
+  // each model, independently. Absent (not 0) when that model's opinion
+  // never came through at all (its API key isn't configured, or its call
+  // failed) — the report page's "Отфильтровать отчёт" filter treats a
+  // missing percent as "can't safely judge this, always keep it", never
+  // as a low score. Both are always 100 on an algorithmic finding (type
+  // in {numbers, placeholders, max_length, missing, punctuation, emoji,
+  // sms_charset}) — set directly by the backend without ever asking a
+  // model, so those are guaranteed, not just likely, to survive filtering.
+  sonnet_percent?: number;
+  gpt_percent?: number;
 }
 
 export interface SingleCheckHistoryEntry {

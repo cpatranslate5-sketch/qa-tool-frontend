@@ -7,6 +7,7 @@
 // already fetched.
 import { alsoRowsSegments, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { buildCopyPayload } from "./copyReport";
+import { buildFilteredTableHtml } from "./filteredReport";
 import type { Finding, MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
@@ -100,6 +101,15 @@ const REPORT_CSS = `
   }
   .copy-btn:hover { border-color: #6366f1; }
   .copy-btn.copied { background: #ecfdf3; border-color: #86e0ae; color: #17703c; }
+  .filter-toggle-btn {
+    background: #1c2230; border: none; border-radius: 999px; color: #fff;
+    cursor: pointer; font-size: 0.85rem; padding: 7px 16px; margin: 4px 0 14px;
+  }
+  .filter-toggle-btn:hover { opacity: 0.9; }
+  .filtered-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.82rem; background: #fff; }
+  .filtered-table th, .filtered-table td { border: 1px solid #dde1e7; padding: 6px 8px; text-align: left; vertical-align: top; }
+  .filtered-table thead { background: #f0f1f4; }
+  .pct-good { color: #17703c; font-weight: 700; }
 `;
 
 export function buildReportHtml(result: MultiCheckResponse): string {
@@ -212,6 +222,16 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   // whole serialized blob rather than trying to sanitize each message.
   const copyPayloadsJson = JSON.stringify(copyPayloads).replace(/</g, "\\u003c");
 
+  // "Отфильтровать отчёт" — Александр's ask (2026-09-25): a second, more
+  // opinionated view of the SAME data, built entirely client-side (the
+  // backend already attached sonnet_percent/gpt_percent to every finding —
+  // see app.claude_client.run_second_opinion) that collapses the normal
+  // per-language blocks into one flat table of only the findings neither
+  // model was unconvinced by (see filteredReport.ts for the exact rule).
+  // Computed once up front, same as copyPayloads above, and toggled purely
+  // by hiding/showing two containers — no re-render, no backend call.
+  const filteredTableHtml = buildFilteredTableHtml(sheets, allLangs);
+
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -227,7 +247,11 @@ export function buildReportHtml(result: MultiCheckResponse): string {
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
     ${filterBarHtml}
     ${copyBarHtml}
-    ${sheetsHtml}
+    <div>
+      <button type="button" id="filter-toggle-btn" class="filter-toggle-btn">✅ Отфильтровать отчёт</button>
+    </div>
+    <div id="blocks-view">${sheetsHtml}</div>
+    <div id="filtered-view" hidden>${filteredTableHtml}</div>
   </div>
   <script>
     var COPY_PAYLOADS = ${copyPayloadsJson};
@@ -284,6 +308,24 @@ export function buildReportHtml(result: MultiCheckResponse): string {
         filterLang(btn.dataset.lang, btn);
       });
     });
+    // "Отфильтровать отчёт" — a plain visibility toggle between the normal
+    // per-language blocks and the flat filtered table (both already fully
+    // built above, see filteredTableHtml) — reversible, so a manager who
+    // wants to double-check something against the full, unfiltered report
+    // can switch back without reopening the report.
+    (function () {
+      var toggleBtn = document.getElementById("filter-toggle-btn");
+      var blocksView = document.getElementById("blocks-view");
+      var filteredView = document.getElementById("filtered-view");
+      if (!toggleBtn || !blocksView || !filteredView) return;
+      var filtered = false;
+      toggleBtn.addEventListener("click", function () {
+        filtered = !filtered;
+        blocksView.hidden = filtered;
+        filteredView.hidden = !filtered;
+        toggleBtn.textContent = filtered ? "↩ Показать все находки" : "✅ Отфильтровать отчёт";
+      });
+    })();
   </script>
 </body>
 </html>`;
