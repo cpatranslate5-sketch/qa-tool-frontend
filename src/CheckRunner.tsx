@@ -4,7 +4,7 @@ import {
   knownLanguages, listLanguageAliases, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
-import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import type {
@@ -626,16 +626,18 @@ export default function CheckRunner({
   const resultLangs: string[] = multiResult?.sheets
     ? [...new Set(multiResult.sheets.flatMap(s => s.languages_checked))]
     : [];
-  // How many rows had findings for each language, summed across every
-  // sheet it appears in — the same number already shown in that
-  // language's own section header ("N найдено") below, just surfaced on
-  // the filter button itself too, so a language with problems stands out
-  // ("HI (4)") before even scrolling down to it.
+  // How many actual findings (not rows) this language has, summed across
+  // every sheet it appears in — shown on the filter button itself
+  // ("HI (4)"), so a language with problems stands out before even
+  // scrolling down to it. Deliberately findingCountInRows, not realRowCount
+  // — Александр's ask (2026-09-25): a row with two findings should count as
+  // 2 here, not 1, so this badge total actually adds up to the same number
+  // as the top "N проблем" summary.
   const findingsCountByLang: Record<string, number> = {};
   multiResult?.sheets?.forEach(sheet => {
     sheet.languages_checked.forEach(lang => {
       const rows = sheet.languages[lang] || [];
-      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + realRowCount(rows);
+      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + findingCountInRows(rows);
     });
   });
   const elapsedMinutes = multiResult?.created_at
@@ -992,7 +994,7 @@ export default function CheckRunner({
             type="button"
             className="download-link"
             style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginLeft: 20 }}
-            onClick={() => openReportInNewTab(() => multiCheckDetail(project.id, multiResult.multi_check_id, manager.id))}
+            onClick={() => openReportInNewTab(() => multiCheckDetail(project.id, multiResult.multi_check_id, manager.id), project.id, manager.id)}
           >
             ⧉ Открыть в новой вкладке
           </button>

@@ -356,7 +356,7 @@ export function MultiCheckHistoryList({
       onOpen(h.id);
       return;
     }
-    const opened = await openReportInNewTab(() => multiCheckDetail(project.id, h.id, manager.id));
+    const opened = await openReportInNewTab(() => multiCheckDetail(project.id, h.id, manager.id), project.id, manager.id);
     if (!opened) onOpen(h.id);
   }
 

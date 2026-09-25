@@ -31,6 +31,20 @@ export function realFindingCount(findings: Finding[]): number {
   return findings.filter(f => f.type !== "register_summary").length;
 }
 
+// The count shown in the "(N)" badge next to a language code on the
+// per-language filter bar (CheckRunner.tsx and reportHtml.ts) — Александр's
+// ask (2026-09-25): this used to be realRowCount (how many ROWS in this
+// language have at least one finding), which understates things whenever a
+// single row carries more than one finding — he wants the badge to say how
+// many actual remarks/findings there are, matching the backend's own
+// summary.total_findings (see excel_multi._count_real_findings), which
+// already counts individual findings, not rows. Same register_summary
+// exclusion as realRowCount/realFindingCount — that synthetic tone report
+// is informational, not a problem, and must never inflate this count.
+export function findingCountInRows(rows: MultiCheckRowResult[]): number {
+  return rows.reduce((sum, r) => sum + (isRegisterSummaryRow(r) ? 0 : r.findings.length), 0);
+}
+
 // Turns a two-letter region code ("KZ") into its flag emoji by combining the
 // two Unicode "regional indicator symbol" characters — this works for any
 // real ISO 3166-1 country code without a hand-maintained table, so it stays

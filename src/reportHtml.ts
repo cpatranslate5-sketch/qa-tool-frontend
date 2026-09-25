@@ -5,9 +5,10 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { alsoRowsSegments, describeChecksRu, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, describeChecksRu, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { buildCopyPayload } from "./copyReport";
 import { buildFilteredTableHtml } from "./filteredReport";
+import { multiCheckReportUrl } from "./api";
 import type { Finding, MultiCheckResponse } from "./types";
 
 function esc(s: string): string {
@@ -110,9 +111,19 @@ const REPORT_CSS = `
   .filtered-table th, .filtered-table td { border: 1px solid #dde1e7; padding: 6px 8px; text-align: left; vertical-align: top; }
   .filtered-table thead { background: #f0f1f4; }
   .pct-good { color: #17703c; font-weight: 700; }
+  .download-link {
+    display: inline-block; color: #6366f1; text-decoration: none;
+    font-size: 0.85rem; margin: 10px 0 4px; font-weight: 600;
+  }
+  .download-link:hover { text-decoration: underline; }
 `;
 
-export function buildReportHtml(result: MultiCheckResponse): string {
+// projectId/managerId: only needed for the "Скачать отчёт (Excel)" link
+// (Александр's ask, 2026-09-25 — being able to download the Excel version
+// from the already-open report tab, not just from the check screen it was
+// opened from) — undefined omits that link entirely rather than building a
+// broken URL, for any caller that genuinely doesn't have them.
+export function buildReportHtml(result: MultiCheckResponse, projectId?: number, managerId?: number): string {
   const summary = result.summary;
   const sheets = result.sheets || [];
   const unrecognized = sheets.flatMap(s => s.unrecognized_columns);
@@ -156,15 +167,15 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   // so the filtering itself happens via plain JS at the bottom instead of
   // React state).
   const allLangs = [...new Set(sheets.flatMap(s => s.languages_checked))];
-  // How many rows had findings for each language, summed across every
-  // sheet it appears in — same number as that language's own section
-  // heading, just shown on the filter button too ("HI (4)"), so a
-  // problem language stands out before scrolling down to it.
+  // How many actual findings (not rows) this language has, summed across
+  // every sheet it appears in — shown on the filter button ("HI (4)"), so a
+  // problem language stands out before scrolling down to it. See
+  // lang.ts's findingCountInRows for why this counts findings, not rows.
   const findingsCountByLang: Record<string, number> = {};
   sheets.forEach(sheet => {
     sheet.languages_checked.forEach(lang => {
       const rows = sheet.languages[lang] || [];
-      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + realRowCount(rows);
+      findingsCountByLang[lang] = (findingsCountByLang[lang] || 0) + findingCountInRows(rows);
     });
   });
   // Language codes are attacker-reachable (they come straight from a
@@ -226,10 +237,15 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   // opinionated view of the SAME data, built entirely client-side (the
   // backend already attached sonnet_percent/gpt_percent to every finding —
   // see app.claude_client.run_second_opinion) that collapses the normal
-  // per-language blocks into one flat table of only the findings neither
-  // model was unconvinced by (see filteredReport.ts for the exact rule).
-  // Computed once up front, same as copyPayloads above, and toggled purely
-  // by hiding/showing two containers — no re-render, no backend call.
+  // per-language blocks into a table of only the findings neither model
+  // was unconvinced by (see filteredReport.ts for the exact rule, plus the
+  // Indian-language-only stricter one). Computed once up front, same as
+  // copyPayloads above — one <tbody> per language inside it, so the
+  // language filter bar (via updateFilteredVisibility in the <script>
+  // below) can show just one language's filtered rows at a time, the same
+  // way it already narrows the normal blocks view. Toggled between this
+  // and the blocks view purely by hiding/showing two containers — no
+  // re-render, no backend call.
   const filteredTableHtml = buildFilteredTableHtml(sheets, allLangs);
 
   return `<!DOCTYPE html>
@@ -244,6 +260,9 @@ export function buildReportHtml(result: MultiCheckResponse): string {
   <div class="page">
     <h1>${esc(titleText)}</h1>
     ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}${(() => { const c = describeChecksRu(result.checks_run); return c ? ` Критерии: ${esc(c)}.` : ""; })()}</p>` : ""}
+    ${projectId != null && managerId != null
+      ? `<div><a class="download-link" href="${esc(multiCheckReportUrl(projectId, result.multi_check_id, managerId))}" target="_blank" rel="noopener noreferrer">⬇ Скачать отчёт (Excel)</a></div>`
+      : ""}
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
     ${filterBarHtml}
     ${copyBarHtml}
@@ -289,7 +308,16 @@ export function buildReportHtml(result: MultiCheckResponse): string {
     // string built server-side and handed to an inline onclick="...") —
     // a language code comes straight from an uploaded file's column
     // header, so it isn't trustworthy enough to interpolate into a script
-    // string.
+    // string. Also drives the filtered table's own per-language <tbody>
+    // groups (see updateFilteredVisibility below) — Александр's ask
+    // (2026-09-25): "Отфильтровать отчёт" should only build/show the
+    // currently-open language's filtered rows, not every language at
+    // once, so the same language selection that already narrows the
+    // normal blocks view now narrows the filtered view too, live —
+    // whichever language tab is active when the filter button is
+    // clicked (or switched to afterwards) is what the filtered table
+    // shows, even if that switch happens while the filtered view is
+    // already the one on screen.
     function filterLang(lang, btn) {
       document.querySelectorAll(".lang-block").forEach(function (el) {
         el.hidden = lang !== "all" && el.getAttribute("data-lang") !== lang;
@@ -303,12 +331,31 @@ export function buildReportHtml(result: MultiCheckResponse): string {
       document.querySelectorAll(".lang-filter-btn").forEach(function (b) {
         b.classList.toggle("active", b === btn);
       });
+      updateFilteredVisibility(lang);
     }
     document.querySelectorAll(".lang-filter-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
         filterLang(btn.dataset.lang, btn);
       });
     });
+    // Shows/hides each language's own <tbody> in the filtered table (see
+    // filteredReport.ts — one <tbody data-lang="xx"> per language, so its
+    // "Тон обращения" rowspan cell always toggles together with the rows
+    // it spans, never partially) to match the language currently selected
+    // above, then shows a plain "nothing survived filtering" row when that
+    // leaves nothing visible — covers both "this one language had nothing
+    // left after filtering" and "the whole report had nothing left".
+    function updateFilteredVisibility(lang) {
+      var anyVisible = false;
+      document.querySelectorAll("#filtered-table tbody[data-lang]").forEach(function (tb) {
+        var show = lang === "all" || tb.getAttribute("data-lang") === lang;
+        tb.hidden = !show;
+        if (show) anyVisible = true;
+      });
+      var emptyRow = document.getElementById("filtered-empty-row");
+      if (emptyRow) emptyRow.hidden = anyVisible;
+    }
+    updateFilteredVisibility("all");
     // "Отфильтровать отчёт" — a plain visibility toggle between the normal
     // per-language blocks and the flat filtered table (both already fully
     // built above, see filteredTableHtml) — reversible, so a manager who
@@ -336,14 +383,19 @@ export function buildReportHtml(result: MultiCheckResponse): string {
 // happen before any `await`), then fills it in once the report data is
 // ready. Returns false when the tab couldn't be opened at all (a strict
 // popup blocker), so the caller can fall back to showing the report inline
-// instead of silently doing nothing.
-export async function openReportInNewTab(fetchDetail: () => Promise<MultiCheckResponse>): Promise<boolean> {
+// instead of silently doing nothing. projectId/managerId are passed straight
+// through to buildReportHtml, for its "Скачать отчёт (Excel)" link.
+export async function openReportInNewTab(
+  fetchDetail: () => Promise<MultiCheckResponse>,
+  projectId?: number,
+  managerId?: number,
+): Promise<boolean> {
   const win = window.open("", "_blank");
   if (!win) return false;
   try {
     const result = await fetchDetail();
     win.document.open();
-    win.document.write(buildReportHtml(result));
+    win.document.write(buildReportHtml(result, projectId, managerId));
     win.document.close();
   } catch {
     win.document.open();
