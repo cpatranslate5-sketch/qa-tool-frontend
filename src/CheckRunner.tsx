@@ -7,6 +7,7 @@ import {
 import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
+import { notifyCheckFinished, requestNotificationPermission } from "./notify";
 import type {
   Finding, Manager, MultiCheckResponse,
   Project,
@@ -235,6 +236,14 @@ export default function CheckRunner({
     knownLanguages(project.id).then(r => setAllLangs(r.languages)).catch(() => setAllLangs([]));
   }, [project.id, manager.id]);
 
+  // Ask for notification permission as early as possible (see notify.ts) —
+  // by the time any check actually finishes, this has very likely already
+  // been resolved one way or the other, so the sound/popup at that point
+  // never depends on a fresh, possibly-blocked permission prompt.
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
   // The global "Словарь языков" dictionary (see LanguageAliases.tsx/
   // models.LanguageAlias) — {alias (lowercase) -> canonical_code}. Fetched
   // once on mount (it's global/project-independent, unlike allLangs above,
@@ -311,6 +320,10 @@ export default function CheckRunner({
         setMultiResult(res);
         if (res.status === "completed" || res.status === "failed") {
           setMultiHistorySignal(s => s + 1);
+          // Sound + popup (best-effort, see notify.ts) — the whole point of
+          // backgrounding this check was so it's fine to tab away while it
+          // runs, so it's worth a nudge once it actually lands.
+          notifyCheckFinished(res.filename || "", res.status === "completed");
         }
       } catch {
         /* transient — just try again next tick */
