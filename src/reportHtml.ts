@@ -319,7 +319,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
     // who wants to double-check something against the full, unfiltered
     // report can still switch to it without reopening the report. Reads
     // which one is currently showing straight off the DOM (rather than a
-    // separate JS boolean duplicating the server-rendered `hidden`
+    // separate JS boolean duplicating the server-rendered "hidden"
     // attributes above), so the two can never disagree.
     (function () {
       var toggleBtn = document.getElementById("filter-toggle-btn");
