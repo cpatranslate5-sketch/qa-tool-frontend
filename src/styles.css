@@ -247,6 +247,13 @@ button:disabled { opacity: 0.5; cursor: default; }
   bottom: 16px;
   right: 16px;
   z-index: 15;
+  /* Without this it inherits the site-wide `textarea, input, select {
+     width: 100%; }` rule (Александр's report, 2026-09-26: the picker was
+     stretching across the whole screen) — being `position: fixed` with no
+     positioned ancestor, "100%" resolved against the viewport itself
+     rather than some nearby container, so it's not enough to just not
+     declare a width; it has to be pinned back to its own content size. */
+  width: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--fg);
