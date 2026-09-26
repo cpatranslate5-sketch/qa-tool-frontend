@@ -295,13 +295,21 @@ export default function CheckRunner({
     if (!multiResult || multiResult.status !== "processing") return;
     const id = multiResult.multi_check_id;
     let cancelled = false;
+    // A real Anthropic batch job polls every 20s (its own status endpoint,
+    // no point hammering it — a batch can take up to an hour anyway). A
+    // live/"Срочно" check now running in the background (added 2026-09-26,
+    // see app.main._run_live_check_background) has no external queue to be
+    // polite to — it's just our own DB — and is normally done in well
+    // under a minute, so it polls much faster to keep that case feeling
+    // close to the old instant response.
+    const intervalMs = multiResult.batch === false ? 2000 : 20000;
     const timer = setInterval(async () => {
       setPolling(true);
       try {
         const res = await multiCheckDetail(project.id, id, manager.id);
         if (cancelled) return;
         setMultiResult(res);
-        if (res.status === "completed") {
+        if (res.status === "completed" || res.status === "failed") {
           setMultiHistorySignal(s => s + 1);
         }
       } catch {
@@ -309,7 +317,7 @@ export default function CheckRunner({
       } finally {
         setPolling(false);
       }
-    }, 20000);
+    }, intervalMs);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -913,7 +921,7 @@ export default function CheckRunner({
         </div>
       )}
 
-      {multiResult && multiResult.status === "processing" && (
+      {multiResult && multiResult.status === "processing" && multiResult.batch !== false && (
         <div className="results">
           <div className="info-box">
             Задача большая — обрабатывается через очередь Anthropic. Anthropic не сообщает точное время
@@ -957,6 +965,37 @@ export default function CheckRunner({
           >
             {cancelling ? "Отменяю…" : "✕ Отменить проверку"}
           </button>
+        </div>
+      )}
+
+      {/* A live/"Срочно" check running in the background (added 2026-09-26,
+          see app.main._run_live_check_background) — no Anthropic queue
+          behind this one, so no ETA/progress-bar/"до часа" messaging, just
+          a short "идёт проверка" while the fast 2s poll above catches the
+          result, normally within seconds. */}
+      {multiResult && multiResult.status === "processing" && multiResult.batch === false && (
+        <div className="results">
+          <div className="info-box">
+            Идёт проверка… Обычно занимает не больше минуты.
+            {polling && " Проверяю, не готово ли ещё…"}
+          </div>
+          <button
+            type="button"
+            className="link-button danger-link"
+            style={{ marginTop: 10 }}
+            onClick={cancelProcessing}
+            disabled={cancelling}
+          >
+            {cancelling ? "Отменяю…" : "✕ Отменить проверку"}
+          </button>
+        </div>
+      )}
+
+      {multiResult && multiResult.status === "failed" && (
+        <div className="results">
+          <div className="error-box">
+            {multiResult.error || "Не удалось выполнить проверку."} Можно попробовать загрузить файл ещё раз.
+          </div>
         </div>
       )}
 

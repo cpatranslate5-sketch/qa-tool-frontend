@@ -450,6 +450,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .history-row:hover { border-color: var(--accent); }
 .history-row-processing { border-color: var(--warning); color: var(--warning); }
+.history-row-failed { border-color: var(--danger); color: var(--danger); }
 .history-row-wrap {
   display: flex;
   align-items: stretch;

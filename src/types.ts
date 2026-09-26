@@ -98,9 +98,15 @@ export interface MultiCheckSummary {
 export interface MultiCheckResponse {
   multi_check_id: number;
   source_lang: string;
-  // "processing" means a big job was handed to Anthropic's cheaper-but-slower
-  // batch queue — summary/sheets aren't ready yet, poll the detail endpoint.
-  status: "processing" | "completed";
+  // "processing" covers two different things now (see the "batch" flag
+  // below): a big job handed to Anthropic's cheaper-but-slower batch queue,
+  // or (added 2026-09-26) a live/"Срочно" check that's simply running in
+  // the background instead of blocking the request — summary/sheets aren't
+  // ready yet either way, poll the detail endpoint. "failed" is only ever
+  // the second kind (a genuine batch failure surfaces per-language inside
+  // the findings instead) — an unexpected error while running the check in
+  // the background, see the "error" field below.
+  status: "processing" | "completed" | "failed";
   filename?: string;
   summary?: MultiCheckSummary;
   sheets?: MultiCheckSheetResult[];
@@ -110,7 +116,9 @@ export interface MultiCheckResponse {
   // Only present while status is "processing" — Anthropic's own count of how
   // many of the batch's per-language requests are done vs. the total, so
   // the UI can show real progress instead of guessing a time estimate
-  // (Anthropic doesn't provide an ETA for a batch job).
+  // (Anthropic doesn't provide an ETA for a batch job). Always null for a
+  // live/"Срочно" check (see "batch" below) — there's no external queue to
+  // report counts for.
   progress?: { done: number; total: number } | null;
   // Only present while status is "processing" — when Anthropic's own counts
   // above haven't moved yet, the UI falls back to showing elapsed waiting
@@ -118,8 +126,20 @@ export interface MultiCheckResponse {
   created_at?: string;
   // Only meaningful while status is "processing" — a rough, non-binding ETA
   // in minutes, learned from how long similarly-sized past batch jobs
-  // actually took. null/absent until there's history to learn from.
+  // actually took. null/absent until there's history to learn from. Always
+  // null for a live/"Срочно" check — see "batch" below.
   estimated_minutes?: number | null;
+  // Only present while status is "processing" — true for a real Anthropic
+  // batch job, false for a live/"Срочно" check that's merely running in the
+  // background (added 2026-09-26, see app.main._run_live_check_background).
+  // The UI uses this to pick a much faster poll interval and skip the
+  // batch-only "обычно занимает до часа" wording for the live case, which
+  // is normally done in well under a minute.
+  batch?: boolean;
+  // Only present once status is "failed" — a short, human-readable reason,
+  // for a live/"Срочно" check that raised an unexpected error while running
+  // in the background instead of completing.
+  error?: string;
   // Only present once status is "completed" — together with created_at,
   // lets the UI show how long the check actually took.
   completed_at?: string | null;
@@ -128,13 +148,28 @@ export interface MultiCheckResponse {
   // AI-based ones), so the UI can show a "Критерии: ..." line and make a
   // $0 cost self-explaining instead of looking like something broke.
   checks_run?: string[];
+  // True right after status flips to "completed" (both the live-check
+  // response and a batch just finishing) while the automatic Sonnet+GPT
+  // second-opinion pass (see app.claude_client.run_second_opinion) is still
+  // running in the background — it used to run BEFORE the response was
+  // sent, which made checks slow enough that the browser's fetch sometimes
+  // gave up ("Failed to fetch") even though the check itself had already
+  // finished and saved fine. Findings are shown right away without
+  // waiting; sonnet_percent/gpt_percent on each Finding just arrive a bit
+  // later. The UI polls multi-check detail while this is true (same
+  // pattern as status=="processing") until it flips to false. Absent/false
+  // for an older record from before this existed, or once the pass has
+  // finished.
+  second_opinion_pending?: boolean;
 }
 
 export interface MultiCheckHistoryEntry {
   id: number;
   filename: string;
   source_lang: string;
-  status: "processing" | "completed";
+  // See MultiCheckResponse.status — "failed" is only ever a live/"Срочно"
+  // check that raised in the background (added 2026-09-26).
+  status: "processing" | "completed" | "failed";
   // {} (empty) while status is "processing" — the backend hasn't computed
   // a summary yet at that point, so every field is optional here.
   summary: Partial<MultiCheckSummary>;
@@ -153,4 +188,6 @@ export interface MultiCheckHistoryEntry {
   // Only present once status is "completed" — together with created_at,
   // lets the history row show how long the check actually took.
   completed_at?: string | null;
+  // Same meaning as MultiCheckResponse.second_opinion_pending — see there.
+  second_opinion_pending?: boolean;
 }

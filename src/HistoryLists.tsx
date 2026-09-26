@@ -383,7 +383,7 @@ export function MultiCheckHistoryList({
       {!collapsed && history.map(h => (
         <div key={h.id} className="history-row-wrap">
           <button
-            className={`history-row ${h.status === "processing" ? "history-row-processing" : ""}`}
+            className={`history-row ${h.status === "processing" ? "history-row-processing" : ""}${h.status === "failed" ? "history-row-failed" : ""}`}
             onClick={() => handleOpen(h)}
           >
             {new Date(h.created_at).toLocaleString("ru-RU")}
@@ -404,6 +404,15 @@ export function MultiCheckHistoryList({
                   // elapsed number has something to compare against.
                   : `обрабатывается — прошло ${formatElapsedMinutesRu(Math.max(0, Math.floor((Date.now() - Date.parse(h.created_at)) / 60000)))}`
                     + (h.estimated_minutes ? ` (обычно ~${h.estimated_minutes} мин)` : ""))
+              // Added 2026-09-26 alongside backgrounding the live/"Срочно"
+              // path — a background failure used to be impossible here (a
+              // still-processing batch either finished or stayed
+              // "processing" forever), so this case didn't exist before.
+              // Without it, a failed check fell into the "completed" branch
+              // below and showed a misleading "0 проблем — $0.00", as if it
+              // had actually run clean.
+              : h.status === "failed"
+              ? "ошибка — проверка не выполнена"
               : `${h.summary.total_findings ?? 0} проблем — ${formatCostRu(h.cost_usd)}`
                 + (formatDurationRu(h.created_at, h.completed_at) ? ` — заняла ${formatDurationRu(h.created_at, h.completed_at)}` : "")}
           </button>
