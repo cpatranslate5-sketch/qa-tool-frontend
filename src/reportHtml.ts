@@ -6,7 +6,6 @@
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
 import { alsoRowsSegments, describeChecksRu, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
-import { buildCopyPayload } from "./copyReport";
 import { buildFilteredTableHtml } from "./filteredReport";
 import { multiCheckReportUrl } from "./api";
 import type { Finding, MultiCheckResponse } from "./types";
@@ -95,13 +94,6 @@ const REPORT_CSS = `
   .lang-filter-btn:hover { border-color: #6366f1; }
   .lang-filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
   .lang-filter-btn.has-findings:not(.active) { border-color: #b45309; color: #b45309; font-weight: 600; }
-  .copy-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
-  .copy-btn {
-    background: #f0f1ff; border: 1px solid #c7caf7; border-radius: 999px; color: #3730a3;
-    cursor: pointer; font-size: 0.8rem; padding: 5px 12px;
-  }
-  .copy-btn:hover { border-color: #6366f1; }
-  .copy-btn.copied { background: #ecfdf3; border-color: #86e0ae; color: #17703c; }
   .filter-toggle-btn {
     background: #1c2230; border: none; border-radius: 999px; color: #fff;
     cursor: pointer; font-size: 0.85rem; padding: 7px 16px; margin: 4px 0 14px;
@@ -201,52 +193,44 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
     </div>
   ` : "";
 
-  // "Копировать" buttons — Александр's ask (2026-09-25): each one puts a
-  // single ready-to-paste chat message on the clipboard (see copyReport.ts
-  // for the full rationale) — the numbered findings for either every
-  // checked language at once or just one, together with the fixed
-  // instructions for whatever AI model reads it. The actual payload text
-  // is computed here (not in the page's own <script>, which has no access
-  // to the typed MultiCheckResponse) and handed to the page as a plain
-  // object keyed by the same "all"/language-code values the filter bar
-  // above already uses, read back the same safe way (via .dataset, never
-  // interpolated into an inline onclick="..." string — see the filter
-  // bar's own comment on why a language code can't be trusted in a JS
-  // string context).
-  const copyKeys = allLangs.length > 1 ? ["all", ...allLangs] : allLangs;
-  const copyPayloads: Record<string, string> = {};
-  for (const key of copyKeys) {
-    copyPayloads[key] = buildCopyPayload(sheets, key);
-  }
-  const copyBarHtml = copyKeys.length > 0 ? `
-    <div class="copy-bar">
-      ${allLangs.length > 1
-        ? `<button type="button" class="copy-btn" data-copy="all">📋 Скопировать всё</button>` +
-          allLangs.map(l => `<button type="button" class="copy-btn" data-copy="${esc(l)}">📋 ${esc(flagForLang(l))} ${esc(l)}</button>`).join("")
-        : `<button type="button" class="copy-btn" data-copy="${esc(allLangs[0])}">📋 Скопировать отчёт</button>`}
-    </div>
-  ` : "";
-  // </script> inside the JSON payload (a finding's own message text, which
-  // comes straight from the AI's response) would otherwise prematurely
-  // close this inline script tag when the browser parses the raw HTML —
-  // standard escape for embedding JSON inside <script>, applied to the
-  // whole serialized blob rather than trying to sanitize each message.
-  const copyPayloadsJson = JSON.stringify(copyPayloads).replace(/</g, "\\u003c");
-
   // "Отфильтровать отчёт" — Александр's ask (2026-09-25): a second, more
   // opinionated view of the SAME data, built entirely client-side (the
   // backend already attached sonnet_percent/gpt_percent to every finding —
   // see app.claude_client.run_second_opinion) that collapses the normal
   // per-language blocks into a table of only the findings neither model
   // was unconvinced by (see filteredReport.ts for the exact rule, plus the
-  // Indian-language-only stricter one). Computed once up front, same as
-  // copyPayloads above — one <tbody> per language inside it, so the
-  // language filter bar (via updateFilteredVisibility in the <script>
-  // below) can show just one language's filtered rows at a time, the same
-  // way it already narrows the normal blocks view. Toggled between this
-  // and the blocks view purely by hiding/showing two containers — no
-  // re-render, no backend call.
+  // Indian-language-only stricter one), with columns matching what
+  // Александр asked the FINAL report to consist of (2026-09-26): № ошибки,
+  // № строки, Язык, Тон обращения, Источник, Перевод, Процент уверенности
+  // ИИ, Комментарий — plus one extra column (Ср. вероятность ошибки, the
+  // averaged percent) kept as a bonus since it's what actually drives the
+  // filtering rule and is cheap to show. One <tbody> per language inside
+  // it, so the language filter bar (via updateFilteredVisibility in the
+  // <script> below) can show just one language's filtered rows at a time,
+  // the same way it already narrows the normal blocks view.
+  //
+  // This is now the view the report OPENS on by default (see
+  // isFilteredDefault below) — it's meant to BE the report, not an optional
+  // extra a manager has to remember to click into. The old "📋 Скопировать"
+  // buttons (copyReport.ts) that used to sit above this — copy the whole
+  // report to the clipboard, paste it into any AI chat, get back a hand-
+  // built table shaped like this one — are gone (Александр's ask,
+  // 2026-09-26: "они больше не нужны, т.к. ты это сам запрашиваешь на
+  // этапе разбора отчёта"), since that manual step is now fully redundant
+  // with this automatic one: run_second_opinion already IS a real,
+  // automated Sonnet+GPT pass that reads a whole language's findings at
+  // once (the same "avoid row-by-row inconsistency" fix that manual
+  // feature existed to work around by hand) and this table already
+  // surfaces its result. Toggled with the blocks view purely by hiding/
+  // showing two containers — no re-render, no backend call.
   const filteredTableHtml = buildFilteredTableHtml(sheets, allLangs);
+  // While the second-opinion percentages are still being computed in the
+  // background (see the info-box below), shouldKeepFinding's fail-safe
+  // keeps every finding, so the filtered table isn't actually filtering
+  // anything yet — opening straight into the normal, familiar blocks view
+  // in that case avoids a confusing "everything's still here, did this
+  // even do anything?" first impression.
+  const isFilteredDefault = !result.second_opinion_pending;
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -265,42 +249,14 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       : ""}
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
     ${filterBarHtml}
-    ${copyBarHtml}
-    ${result.second_opinion_pending ? `<div class="info-box">Процент уверенности ИИ для находок ещё досчитывается в фоне (обычно не дольше минуты) — пока он не готов, «Отфильтровать отчёт» ничего не отсеивает. Закройте вкладку и откройте отчёт заново через минуту, чтобы увидеть отфильтрованную версию.</div>` : ""}
+    ${result.second_opinion_pending ? `<div class="info-box">Процент уверенности ИИ для находок ещё досчитывается в фоне (обычно не дольше минуты) — пока он не готов, показан обычный (неотфильтрованный) отчёт. Закройте вкладку и откройте отчёт заново через минуту, чтобы увидеть отфильтрованную версию.</div>` : ""}
     <div>
-      <button type="button" id="filter-toggle-btn" class="filter-toggle-btn">✅ Отфильтровать отчёт</button>
+      <button type="button" id="filter-toggle-btn" class="filter-toggle-btn">${isFilteredDefault ? "↩ Показать все находки" : "✅ Отфильтровать отчёт"}</button>
     </div>
-    <div id="blocks-view">${sheetsHtml}</div>
-    <div id="filtered-view" hidden>${filteredTableHtml}</div>
+    <div id="blocks-view" ${isFilteredDefault ? "hidden" : ""}>${sheetsHtml}</div>
+    <div id="filtered-view" ${isFilteredDefault ? "" : "hidden"}>${filteredTableHtml}</div>
   </div>
   <script>
-    var COPY_PAYLOADS = ${copyPayloadsJson};
-    function copyReport(key, btn) {
-      var text = COPY_PAYLOADS[key];
-      if (text == null) return;
-      function showCopied() {
-        var original = btn.dataset.label || btn.textContent;
-        btn.dataset.label = original;
-        btn.textContent = "✅ Скопировано";
-        btn.classList.add("copied");
-        setTimeout(function () {
-          btn.textContent = original;
-          btn.classList.remove("copied");
-        }, 1500);
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(showCopied, function () {
-          window.prompt("Не удалось скопировать автоматически — скопируйте вручную:", text);
-        });
-      } else {
-        window.prompt("Скопируйте текст вручную:", text);
-      }
-    }
-    document.querySelectorAll(".copy-btn").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        copyReport(btn.dataset.copy, btn);
-      });
-    });
     // Narrows the always-visible breakdown down to one language's findings
     // — "Все" (the default, matching the active button on load) shows
     // everything, same as before this existed. Reads the target language
@@ -356,17 +312,21 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       if (emptyRow) emptyRow.hidden = anyVisible;
     }
     updateFilteredVisibility("all");
-    // "Отфильтровать отчёт" — a plain visibility toggle between the normal
-    // per-language blocks and the flat filtered table (both already fully
-    // built above, see filteredTableHtml) — reversible, so a manager who
-    // wants to double-check something against the full, unfiltered report
-    // can switch back without reopening the report.
+    // "Отфильтровать отчёт" — a plain visibility toggle between the flat
+    // filtered table (the report's default view, see isFilteredDefault
+    // above) and the normal per-language blocks (both already fully built
+    // above, see filteredTableHtml/sheetsHtml) — reversible, so a manager
+    // who wants to double-check something against the full, unfiltered
+    // report can still switch to it without reopening the report. Reads
+    // which one is currently showing straight off the DOM (rather than a
+    // separate JS boolean duplicating the server-rendered `hidden`
+    // attributes above), so the two can never disagree.
     (function () {
       var toggleBtn = document.getElementById("filter-toggle-btn");
       var blocksView = document.getElementById("blocks-view");
       var filteredView = document.getElementById("filtered-view");
       if (!toggleBtn || !blocksView || !filteredView) return;
-      var filtered = false;
+      var filtered = blocksView.hidden;
       toggleBtn.addEventListener("click", function () {
         filtered = !filtered;
         blocksView.hidden = filtered;
