@@ -6,7 +6,7 @@ import FolderPicker from "./FolderPicker";
 import LanguageAliases from "./LanguageAliases";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
-import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
+import { applyTheme, loadTheme, saveTheme, THEME_LABELS, THEME_OPTIONS, type Theme } from "./theme";
 import type { Manager, Project } from "./types";
 
 type View =
@@ -101,12 +101,6 @@ export default function App() {
     })();
   }, []);
 
-  function toggleTheme() {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    saveTheme(next);
-  }
-
   function handleEnter(m: Manager) {
     setManager(m);
     setView({ name: "projects" });
@@ -146,10 +140,25 @@ export default function App() {
     if (manager) saveStoredSession({ managerId: manager.id, view: { name: "project", projectId: project.id } });
   }
 
+  // Replaced the old plain dark/light toggle button with a "Выбор темы"
+  // dropdown offering all 6 named themes (Александр's ask, 2026-09-26) — a
+  // native <select> needs no extra dependency and stays fully accessible/
+  // keyboard-usable, unlike a custom popup menu.
   const themeToggle = (
-    <button className="theme-toggle" onClick={toggleTheme}>
-      {theme === "dark" ? "☀ Светлая тема" : "🌙 Тёмная тема"}
-    </button>
+    <select
+      className="theme-picker"
+      aria-label="Выбор темы"
+      value={theme}
+      onChange={e => {
+        const next = e.target.value as Theme;
+        setTheme(next);
+        saveTheme(next);
+      }}
+    >
+      {THEME_OPTIONS.map(t => (
+        <option key={t} value={t}>{THEME_LABELS[t]}</option>
+      ))}
+    </select>
   );
 
   if (restoring) {

@@ -44,6 +44,79 @@
   --low-severity: #6A3FD1;
 }
 
+/* Four extra themes added to the picker (Александр's ask, 2026-09-26,
+   replacing the old plain dark/light toggle with "Выбор темы"): all four
+   are warm/soft, light-background palettes (same shape/roles as
+   [data-theme="light"] above, only the hue changes) — his own spec was
+   "тёплых и мягких тонов" for these, while --accent (and, following the
+   same idea, --low-severity) is allowed to sit at a deeper, more
+   saturated version of each theme's own hue purely so buttons/links stay
+   readable against a pale background, not because it's meant to look like
+   a different theme. --danger/--warning/--success are intentionally left
+   at the same values in every theme (including plain light/dark above) —
+   what a red/amber/green finding marker means shouldn't shift depending
+   on which theme is open. */
+[data-theme="beige"] {
+  --bg: #F5F0E6;
+  --fg: #2E2A22;
+  --panel: #FFFDF8;
+  --panel-2: #EDE4D3;
+  --border: #DDD0B8;
+  --muted: #8A7F68;
+  --muted-2: #4A4232;
+  --accent: #A8763F;
+  --accent-fg: #FFFFFF;
+  --danger: #B23B27;
+  --warning: #A9660E;
+  --success: #2F8F52;
+  --low-severity: #8A5FBE;
+}
+[data-theme="pink"] {
+  --bg: #FBF0F2;
+  --fg: #3A222A;
+  --panel: #FFFFFF;
+  --panel-2: #F7E1E6;
+  --border: #EFC9D2;
+  --muted: #9C7480;
+  --muted-2: #5C3540;
+  --accent: #C6577A;
+  --accent-fg: #FFFFFF;
+  --danger: #B23B27;
+  --warning: #A9660E;
+  --success: #2F8F52;
+  --low-severity: #8A5FBE;
+}
+[data-theme="green"] {
+  --bg: #EFF5EC;
+  --fg: #232C22;
+  --panel: #FFFFFF;
+  --panel-2: #DEEAD9;
+  --border: #C7DCC0;
+  --muted: #75846E;
+  --muted-2: #3A4A34;
+  --accent: #4C8C5B;
+  --accent-fg: #FFFFFF;
+  --danger: #B23B27;
+  --warning: #A9660E;
+  --success: #2F8F52;
+  --low-severity: #6A6FBE;
+}
+[data-theme="blue"] {
+  --bg: #EEF3FA;
+  --fg: #1E2733;
+  --panel: #FFFFFF;
+  --panel-2: #DCE8F5;
+  --border: #C3D8ED;
+  --muted: #6D7E93;
+  --muted-2: #33455A;
+  --accent: #3E72B0;
+  --accent-fg: #FFFFFF;
+  --danger: #B23B27;
+  --warning: #A9660E;
+  --success: #2F8F52;
+  --low-severity: #7457C4;
+}
+
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -169,7 +242,7 @@ button:disabled { opacity: 0.5; cursor: default; }
    Fixed at the bottom-right (not the top) specifically so it never sits on
    top of a page's own top-bar buttons (← back, "Сменить папку", etc.),
    which always live in the top-right of the centered content column. */
-.theme-toggle {
+.theme-picker {
   position: fixed;
   bottom: 16px;
   right: 16px;
@@ -182,6 +255,8 @@ button:disabled { opacity: 0.5; cursor: default; }
   font-size: 0.8rem;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  accent-color: var(--accent);
 }
 
 /* --- login --- */
