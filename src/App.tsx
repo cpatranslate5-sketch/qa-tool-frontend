@@ -6,7 +6,8 @@ import FolderPicker from "./FolderPicker";
 import LanguageAliases from "./LanguageAliases";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
-import { applyTheme, loadTheme, saveTheme, THEME_LABELS, THEME_OPTIONS, type Theme } from "./theme";
+import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
+import ThemePicker from "./ThemePicker";
 import type { Manager, Project } from "./types";
 
 type View =
@@ -140,25 +141,21 @@ export default function App() {
     if (manager) saveStoredSession({ managerId: manager.id, view: { name: "project", projectId: project.id } });
   }
 
-  // Replaced the old plain dark/light toggle button with a "Выбор темы"
-  // dropdown offering all 6 named themes (Александр's ask, 2026-09-26) — a
-  // native <select> needs no extra dependency and stays fully accessible/
-  // keyboard-usable, unlike a custom popup menu.
+  // Replaced the old plain dark/light toggle button with a "Сменить тему"
+  // dropdown offering all 6 named themes (Александр's ask, 2026-09-26).
+  // First tried a plain native <select>, but its closed face always shows
+  // whichever option is currently selected — there's no way to keep it
+  // reading a fixed "Сменить тему" label instead, which is what Александр
+  // actually wanted (2026-09-26 follow-up) — so this is now a small custom
+  // dropdown (see ThemePicker.tsx) instead of a native <select>.
   const themeToggle = (
-    <select
-      className="theme-picker"
-      aria-label="Выбор темы"
-      value={theme}
-      onChange={e => {
-        const next = e.target.value as Theme;
+    <ThemePicker
+      theme={theme}
+      onChange={next => {
         setTheme(next);
         saveTheme(next);
       }}
-    >
-      {THEME_OPTIONS.map(t => (
-        <option key={t} value={t}>{THEME_LABELS[t]}</option>
-      ))}
-    </select>
+    />
   );
 
   if (restoring) {
