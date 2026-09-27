@@ -121,9 +121,12 @@ interface FilteredRow {
 // and the table itself is split into one <tbody> per language so the
 // report page's language filter can show/hide one at a time. Every
 // language in `langs` gets computed here even when nothing survives
-// filtering for it (an empty `rows` array) — buildFilteredTableHtml then
-// simply renders no <tbody> for it, and the shared "nothing survived" row
-// covers that language same as it covers the whole table being empty.
+// filtering for it (an empty `rows` array) — buildFilteredTableHtml still
+// renders a <tbody> for it in that case, a single row showing just the
+// language and its tone of address (Александр's ask, 2026-09-27: tone of
+// address must stay visible for a language even when it has no remaining
+// findings — a manager checking a clean language shouldn't lose that fact
+// just because there's nothing else to show).
 interface FilteredLangGroup {
   lang: string;
   toneHtml: string;
@@ -171,8 +174,24 @@ function buildFilteredGroups(sheets: MultiCheckSheetResult[], langs: string[]): 
 export function buildFilteredTableHtml(sheets: MultiCheckSheetResult[], langs: string[]): string {
   const groups = buildFilteredGroups(sheets, langs);
   const bodyHtml = groups
-    .filter(g => g.rows.length > 0)
     .map(g => {
+      // No surviving findings for this language — still show its tone of
+      // address rather than dropping the language from the table entirely
+      // (Александр's ask, 2026-09-27). One plain row, no rowspan needed
+      // since there's nothing else to span it across.
+      if (g.rows.length === 0) {
+        return `
+          <tbody data-lang="${esc(g.lang)}">
+            <tr data-lang="${esc(g.lang)}">
+              <td>—</td>
+              <td>—</td>
+              <td>${esc(flagForLang(g.lang))} ${esc(g.lang)}</td>
+              <td>${g.toneHtml}</td>
+              <td colspan="4" class="muted">Проблем не найдено.</td>
+            </tr>
+          </tbody>
+        `;
+      }
       const trs = g.rows.map((r, i) => `
         <tr data-lang="${esc(g.lang)}">
           <td>${r.errorNumber}</td>
@@ -189,9 +208,11 @@ export function buildFilteredTableHtml(sheets: MultiCheckSheetResult[], langs: s
     }).join("");
   // Always shown in the DOM (never a separate early-return paragraph the
   // way this used to work) so reportHtml.ts's updateFilteredVisibility can
-  // reveal it purely by toggling `hidden`, whether NOTHING survived
-  // filtering anywhere, or just nothing survived for whichever single
-  // language is currently selected.
+  // reveal it purely by toggling `hidden`. filtered-empty-row below is now
+  // only ever the fallback for the degenerate case of zero checked
+  // languages — every real language always has its own <tbody> (with a
+  // "Проблем не найдено" row when nothing survived filtering for it), so
+  // switching to any real language never falls through to it anymore.
   return `
     <table class="filtered-table" id="filtered-table">
       <thead>

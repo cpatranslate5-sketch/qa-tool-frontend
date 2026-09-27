@@ -296,11 +296,13 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
     });
     // Shows/hides each language's own <tbody> in the filtered table (see
     // filteredReport.ts — one <tbody data-lang="xx"> per language, so its
-    // "Тон обращения" rowspan cell always toggles together with the rows
-    // it spans, never partially) to match the language currently selected
-    // above, then shows a plain "nothing survived filtering" row when that
-    // leaves nothing visible — covers both "this one language had nothing
-    // left after filtering" and "the whole report had nothing left".
+    // "Тон обращения" cell always toggles together with the rows it spans,
+    // never partially) to match the language currently selected above.
+    // Every checked language always has its own <tbody> now (a language
+    // with nothing left after filtering still gets one row showing its
+    // tone of address — Александр's ask, 2026-09-27), so filtered-empty-row
+    // below is only ever a fallback for the degenerate "zero languages
+    // checked at all" case.
     function updateFilteredVisibility(lang) {
       var anyVisible = false;
       document.querySelectorAll("#filtered-table tbody[data-lang]").forEach(function (tb) {
