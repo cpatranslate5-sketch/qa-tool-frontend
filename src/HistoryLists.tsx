@@ -284,7 +284,7 @@ export function MultiCheckHistoryList({
   }, [project.id, manager.id, refreshSignal]);
 
   // While anything here is still processing, or has finished but is still
-  // waiting on its background Sonnet+GPT second opinion (see
+  // waiting on its background Sonnet-only second opinion (see
   // types.ts's second_opinion_pending), keep quietly re-fetching so both
   // move along on their own — same idea as CheckRunner's own per-check
   // poll, just for the whole list at once. Opening a report always fetches

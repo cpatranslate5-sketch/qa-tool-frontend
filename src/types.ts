@@ -44,17 +44,16 @@ export interface Finding {
   // listing every exception's full text would be unwieldy past that point.
   register_exception_labels?: (string | number)[] | null;
   // Set by the backend's automatic post-check "second opinion" pass (see
-  // app.claude_client.run_second_opinion) — 0-100 validity percent from
-  // each model, independently. Absent (not 0) when that model's opinion
-  // never came through at all (its API key isn't configured, or its call
+  // app.claude_client.run_second_opinion) — Sonnet-only since 2026-09-27
+  // — a 0-100 validity percent. Absent (not 0) when that opinion never
+  // came through at all (Sonnet's API key isn't configured, or its call
   // failed) — the report page's "Отфильтровать отчёт" filter treats a
   // missing percent as "can't safely judge this, always keep it", never
-  // as a low score. Both are always 100 on an algorithmic finding (type
-  // in {numbers, placeholders, max_length, missing, punctuation, emoji,
+  // as a low score. Always 100 on an algorithmic finding (type in
+  // {numbers, placeholders, max_length, missing, punctuation, emoji,
   // sms_charset}) — set directly by the backend without ever asking a
   // model, so those are guaranteed, not just likely, to survive filtering.
   sonnet_percent?: number;
-  gpt_percent?: number;
 }
 
 export interface SingleCheckHistoryEntry {
@@ -149,13 +148,13 @@ export interface MultiCheckResponse {
   // $0 cost self-explaining instead of looking like something broke.
   checks_run?: string[];
   // True right after status flips to "completed" (both the live-check
-  // response and a batch just finishing) while the automatic Sonnet+GPT
+  // response and a batch just finishing) while the automatic Sonnet-only
   // second-opinion pass (see app.claude_client.run_second_opinion) is still
   // running in the background — it used to run BEFORE the response was
   // sent, which made checks slow enough that the browser's fetch sometimes
   // gave up ("Failed to fetch") even though the check itself had already
   // finished and saved fine. Findings are shown right away without
-  // waiting; sonnet_percent/gpt_percent on each Finding just arrive a bit
+  // waiting; sonnet_percent on each Finding just arrives a bit
   // later. The UI polls multi-check detail while this is true (same
   // pattern as status=="processing") until it flips to false. Absent/false
   // for an older record from before this existed, or once the pass has

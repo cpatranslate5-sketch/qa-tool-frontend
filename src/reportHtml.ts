@@ -195,19 +195,19 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
 
   // "Отфильтровать отчёт" — Александр's ask (2026-09-25): a second, more
   // opinionated view of the SAME data, built entirely client-side (the
-  // backend already attached sonnet_percent/gpt_percent to every finding —
-  // see app.claude_client.run_second_opinion) that collapses the normal
-  // per-language blocks into a table of only the findings neither model
-  // was unconvinced by (see filteredReport.ts for the exact rule, plus the
-  // Indian-language-only stricter one), with columns matching what
-  // Александр asked the FINAL report to consist of (2026-09-26): № ошибки,
-  // № строки, Язык, Тон обращения, Источник, Перевод, Процент уверенности
-  // ИИ, Комментарий — plus one extra column (Ср. вероятность ошибки, the
-  // averaged percent) kept as a bonus since it's what actually drives the
-  // filtering rule and is cheap to show. One <tbody> per language inside
-  // it, so the language filter bar (via updateFilteredVisibility in the
-  // <script> below) can show just one language's filtered rows at a time,
-  // the same way it already narrows the normal blocks view.
+  // backend already attached sonnet_percent to every finding — see
+  // app.claude_client.run_second_opinion, Sonnet-only since 2026-09-27)
+  // that collapses the normal per-language blocks into a table of only the
+  // findings Claude was convinced by (see filteredReport.ts for the exact
+  // rule, plus the Indian-language-only stricter threshold), with columns
+  // matching what Александр asked the FINAL report to consist of
+  // (2026-09-26, revised 2026-09-27 to drop the averaged-percent column
+  // now that only one model's score exists): № ошибки, № строки, Язык, Тон
+  // обращения, Источник, Перевод, Процент уверенности ИИ, Комментарий. One
+  // <tbody> per language inside it, so the language filter bar (via
+  // updateFilteredVisibility in the <script> below) can show just one
+  // language's filtered rows at a time, the same way it already narrows
+  // the normal blocks view.
   //
   // This is now the view the report OPENS on by default (see
   // isFilteredDefault below) — it's meant to BE the report, not an optional
@@ -218,11 +218,11 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
   // 2026-09-26: "они больше не нужны, т.к. ты это сам запрашиваешь на
   // этапе разбора отчёта"), since that manual step is now fully redundant
   // with this automatic one: run_second_opinion already IS a real,
-  // automated Sonnet+GPT pass that reads a whole language's findings at
-  // once (the same "avoid row-by-row inconsistency" fix that manual
-  // feature existed to work around by hand) and this table already
-  // surfaces its result. Toggled with the blocks view purely by hiding/
-  // showing two containers — no re-render, no backend call.
+  // automated Sonnet pass that reads a whole language's findings at once
+  // (the same "avoid row-by-row inconsistency" fix that manual feature
+  // existed to work around by hand) and this table already surfaces its
+  // result. Toggled with the blocks view purely by hiding/showing two
+  // containers — no re-render, no backend call.
   const filteredTableHtml = buildFilteredTableHtml(sheets, allLangs);
   // While the second-opinion percentages are still being computed in the
   // background (see the info-box below), shouldKeepFinding's fail-safe

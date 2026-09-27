@@ -338,7 +338,7 @@ export default function CheckRunner({
   }, [multiResult, project.id, manager.id]);
 
   // A completed check's AI findings are shown immediately, but the
-  // automatic Sonnet+GPT "second opinion" (see types.ts's
+  // automatic Sonnet-only "second opinion" (see types.ts's
   // second_opinion_pending) now finishes a few seconds to half a minute
   // later in the background — it used to run before the response was even
   // sent, which was slow enough to sometimes cost the browser's fetch
@@ -1029,7 +1029,7 @@ export default function CheckRunner({
           )}
           {multiResult.second_opinion_pending && (
             <div className="info-box">
-              Находки уже готовы. Отдельно ещё досчитывается процент уверенности ИИ (Claude + GPT) для
+              Находки уже готовы. Отдельно ещё досчитывается процент уверенности ИИ (Claude) для
               каждой находки — обычно занимает не больше минуты; пока он не готов, «Отфильтровать отчёт»
               показывает всё без отсеивания.
             </div>

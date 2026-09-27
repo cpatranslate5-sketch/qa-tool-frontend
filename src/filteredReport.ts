@@ -1,28 +1,28 @@
 // Builds the "Отфильтровать отчёт" table — Александр's ask, 2026-09-25,
 // the second half of the automatic-second-opinion feature (see
 // app.claude_client.run_second_opinion on the backend, which attaches
-// sonnet_percent/gpt_percent to every real finding before the report ever
-// reaches the frontend). Clicking the button on the report page swaps the
-// normal per-language block view for a table of only the findings worth a
-// translator's attention, dropping the ones neither model was convinced by.
+// sonnet_percent to every real finding before the report ever reaches the
+// frontend). Clicking the button on the report page swaps the normal
+// per-language block view for a table of only the findings worth a
+// translator's attention, dropping the ones Claude wasn't convinced by.
 //
-// Filtering rule (confirmed with Александр step by step, 2026-09-25): a
-// finding is REMOVED only when the average of the two percents is below
-// 49 AND the lower of the two is below 40 — UNLESS the higher of the two
-// is above 69, which overrides removal (one model being confident enough
-// is enough to keep it, even if the other disagrees). Anything else stays.
-// A finding missing either model's percent at all (that model's key
-// wasn't configured, or its call failed — see run_second_opinion) is
-// ALWAYS kept — there's no safe basis to remove something neither model
-// actually got to judge.
+// Filtering rule, Sonnet-only since 2026-09-27 (Александр removed GPT from
+// this step entirely — Step 1's search still uses GPT, this filtering pass
+// no longer does): a finding is REMOVED when sonnet_percent is below 40.
+// This is the original two-model rule (average below 49 AND the lower of
+// the two below 40, unless the higher was above 69) reduced to a single
+// score — plugging the same value in for both models collapses that
+// formula to exactly "below 40", so the threshold carries over unchanged
+// rather than being picked fresh. A finding missing sonnet_percent
+// entirely (Sonnet's key wasn't configured, or its call failed — see
+// run_second_opinion) is ALWAYS kept — there's no safe basis to remove
+// something Claude never got to judge.
 //
-// A second, stricter rule was added the same day for Indian-language rows
+// A second, stricter rule was added 2026-09-25 for Indian-language rows
 // specifically (Александр's follow-up ask): for hi/mr/te/hing/bd, a finding
-// is ALSO removed whenever Claude's own sonnet_percent is under 49 — even
-// if the rule above would otherwise have kept it (e.g. a high GPT score
-// clearing the max>69 override). Only Claude's score triggers this — GPT's
-// doesn't — and, same fail-safe as above, a finding with no sonnet_percent
-// at all is never removed by this rule (nothing safe to compare 49 against).
+// is instead removed whenever sonnet_percent is under 49 (still only
+// Claude's score — that part of the rule never depended on GPT to begin
+// with), same fail-safe for a missing percent.
 //
 // Each language's rows render in their own <tbody data-lang="xx"> (see
 // buildFilteredTableHtml) so reportHtml.ts's language filter bar can show
@@ -50,26 +50,22 @@ function isRegisterSummary(f: Finding): boolean {
 }
 
 // Whether a finding should survive "Отфильтровать отчёт" — see this
-// module's own top comment for the exact rule. Algorithmic findings
-// always have sonnet_percent === gpt_percent === 100 (set directly in
-// backend code, never by asking a model — see rule_checks.RULE_BASED_TYPES
-// and run_second_opinion's own comment), so avg=100 always clears the
-// keep threshold on its own; no special-casing needed here for them.
+// module's own top comment for the exact rule. Algorithmic findings always
+// have sonnet_percent === 100 (set directly in backend code, never by
+// asking a model — see rule_checks.RULE_BASED_TYPES and run_second_
+// opinion's own comment), so they always clear the keep threshold on their
+// own; no special-casing needed here for them.
 export function shouldKeepFinding(f: Finding): boolean {
-  const { sonnet_percent: s, gpt_percent: g } = f;
-  if (s == null || g == null) return true;
-  const avg = (s + g) / 2;
-  const min = Math.min(s, g);
-  const max = Math.max(s, g);
-  if (avg < 49 && min < 40 && !(max > 69)) return false;
-  return true;
+  const s = f.sonnet_percent;
+  if (s == null) return true;
+  return s >= 40;
 }
 
 // Александр's ask (2026-09-25, same day as the button itself): for these
-// specific target languages, additionally require Claude's OWN score to
-// clear 49 — see this module's top comment for the exact scope. Matched by
-// base subtag (before any "-region"), same normalization the backend uses
-// for its own hard-language list (claude_client.HARD_LANGUAGE_BASES), so a
+// specific target languages, require Claude's score to clear 49 instead of
+// 40 — see this module's top comment for the exact scope. Matched by base
+// subtag (before any "-region"), same normalization the backend uses for
+// its own hard-language list (claude_client.HARD_LANGUAGE_BASES), so a
 // regional variant of one of these still counts.
 const INDIAN_LANG_BASES = new Set(["hi", "mr", "te", "hing", "bd"]);
 
@@ -78,39 +74,24 @@ function isIndianLang(lang: string): boolean {
 }
 
 // Combines the general keep rule above with the Indian-language-only
-// stricter one — the single predicate buildFilteredGroups actually filters
-// by, so the two rules can never accidentally be applied out of order or
-// only partially.
+// stricter threshold — the single predicate buildFilteredGroups actually
+// filters by, so the two rules can never accidentally be applied out of
+// order or only partially.
 function survivesFilter(lang: string, f: Finding): boolean {
-  if (!shouldKeepFinding(f)) return false;
-  if (isIndianLang(lang) && f.sonnet_percent != null && f.sonnet_percent < 49) return false;
-  return true;
+  const s = f.sonnet_percent;
+  if (s == null) return true;
+  const threshold = isIndianLang(lang) ? 49 : 40;
+  return s >= threshold;
 }
 
-// The single number shown in "Ср. вероятность ошибки" — the average of
-// whichever percent(s) are actually available. null when NEITHER model's
-// opinion came through at all (both branches failed) — shouldKeepFinding
-// above still keeps such a finding (fail-safe), but there's nothing
-// meaningful to average, so the column shows "нет данных" instead of a
-// number (see buildFilteredTableHtml).
-export function avgPercent(f: Finding): number | null {
-  const { sonnet_percent: s, gpt_percent: g } = f;
-  if (s == null && g == null) return null;
-  if (s == null) return g!;
-  if (g == null) return s;
-  return Math.round((s + g) / 2);
-}
-
-// "Claude – 85%; GPT – 20%" — whichever side is above 50 shown in green
-// (Александр's ask), a missing side shown as "нет данных" instead of a
-// guessed number.
+// "Процент уверенности ИИ" cell content — Claude's own percent, shown in
+// green above 50 (Александр's ask), or "нет данных" when it never came
+// through (Sonnet's key wasn't configured, or its call failed).
 function confidenceCellHtml(f: Finding): string {
-  const part = (label: string, pct: number | undefined): string => {
-    if (pct == null) return `${label} — нет данных`;
-    const cls = pct > 50 ? ' class="pct-good"' : "";
-    return `${label} — <span${cls}>${pct}%</span>`;
-  };
-  return `${part("Claude", f.sonnet_percent)}; ${part("GPT", f.gpt_percent)}`;
+  const pct = f.sonnet_percent;
+  if (pct == null) return "нет данных";
+  const cls = pct > 50 ? ' class="pct-good"' : "";
+  return `<span${cls}>${pct}%</span>`;
 }
 
 function toneFindingForLang(rows: MultiCheckRowResult[]): Finding | null {
@@ -130,7 +111,6 @@ interface FilteredRow {
   excelRow: number;
   source: string;
   translation: string;
-  avg: number | null;
   confidenceHtml: string;
   comment: string;
 }
@@ -178,7 +158,6 @@ function buildFilteredGroups(sheets: MultiCheckSheetResult[], langs: string[]): 
             excelRow: row.excel_row,
             source: row.source,
             translation: row.translation,
-            avg: avgPercent(f),
             confidenceHtml: confidenceCellHtml(f),
             comment: f.message,
           });
@@ -202,7 +181,6 @@ export function buildFilteredTableHtml(sheets: MultiCheckSheetResult[], langs: s
           ${i === 0 ? `<td rowspan="${g.rows.length}">${g.toneHtml}</td>` : ""}
           <td>${esc(r.source)}</td>
           <td>${esc(r.translation)}</td>
-          <td>${r.avg == null ? "нет данных" : `${r.avg}%`}</td>
           <td>${r.confidenceHtml}</td>
           <td>${esc(r.comment)}</td>
         </tr>
@@ -224,7 +202,6 @@ export function buildFilteredTableHtml(sheets: MultiCheckSheetResult[], langs: s
           <th>Тон обращения</th>
           <th>Источник</th>
           <th>Перевод</th>
-          <th>Ср. вероятность ошибки</th>
           <th>Процент уверенности ИИ</th>
           <th>Комментарий</th>
         </tr>
@@ -232,7 +209,7 @@ export function buildFilteredTableHtml(sheets: MultiCheckSheetResult[], langs: s
       ${bodyHtml}
       <tbody>
         <tr id="filtered-empty-row" hidden>
-          <td colspan="9" class="muted">После фильтрации не осталось находок, требующих внимания.</td>
+          <td colspan="8" class="muted">После фильтрации не осталось находок, требующих внимания.</td>
         </tr>
       </tbody>
     </table>
