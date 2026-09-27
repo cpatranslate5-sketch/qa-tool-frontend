@@ -147,6 +147,12 @@ export const CHECK_OPTIONS: { key: string; label: string; kind: "ai" | "algo"; d
   { key: "untranslatable", label: "Непереводимые термины (ИИ)", kind: "ai" },
   { key: "completeness", label: "Неполнота перевода, лишний текст (ИИ)", kind: "ai" },
   { key: "typo", label: "Опечатки и ошибки (ИИ)", kind: "ai" },
+  // GPT-only, whole-language pass (Александр's ask, 2026-09-27 — deliberately
+  // never Sonnet/Opus, purely to keep this specific check cheap) — checks
+  // whether the same recurring source term is translated consistently across
+  // every row of a language, something no per-chunk check can see at all. On
+  // by default like every other AI criterion (no defaultOn override below).
+  { key: "term_consistency", label: "Консистентность терминов (ИИ, GPT)", kind: "ai" },
   { key: "punctuation", label: "Оформление (алгоритм)", kind: "algo" },
   { key: "placeholders", label: "Теги/плейсхолдеры (алгоритм)", kind: "algo" },
   { key: "sms_charset", label: "Латиница для SMS, GSM 7-bit (алгоритм)", kind: "algo", defaultOn: false },
@@ -210,6 +216,13 @@ export const TYPE_LABEL: Record<string, string> = {
   // tone can drift mid-cell), so it renders through the normal severity/type
   // badge template like any other problem, just with a friendly label here.
   register_mixed: "Тон обращения",
+  // GPT-only, whole-language consistency check (Александр's ask,
+  // 2026-09-27) — see app.claude_client.run_term_consistency_check. Unlike
+  // every other AI check type, this one can legitimately name several rows
+  // at once (the "(также в строках: ...)" tag app.excel_multi's
+  // _resolve_repeated_findings appends already covers that, same as any
+  // other repeated finding — no separate rendering needed here).
+  term_consistency: "Консистентность терминов",
 };
 
 // Colors for the register_summary majority word — Александр's ask
