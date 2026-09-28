@@ -178,17 +178,39 @@ export interface MultiCheckResponse {
   shares?: Record<string, string>;
   // Translators' answers from their share-link pages (2026-09-30), same keys.
   translator_review?: Record<string, TranslatorEntry>;
+  // Blocks of this report already in «Сохранённое» ("<sheet>|<lang>|<row>").
+  saved_keys?: string[];
 }
 
 export interface TranslatorEntry {
-  decision: "accept" | "reject" | null;
+  // "done" = «Правка внесена», "na" = «Не актуально» (older: accept/reject).
+  decision: "done" | "na" | "accept" | "reject" | null;
   comment?: string;
+  // The manager's tick «проверено» on the share page.
+  checked?: boolean;
+}
+
+export interface SavedCase {
+  id: number;
+  project_name: string;
+  filename: string;
+  lang: string;
+  excel_row: number;
+  context: string;
+  source: string;
+  translation: string;
+  findings: { type: string; severity: string; message: string }[];
+  saved_by_name: string;
+  created_at: string | null;
 }
 
 export interface ReviewEntry {
   decision: "accept" | "question" | "reject" | null;
   links: string;
   note?: string;
+  // Set on the share page by the head of QA (2026-10-01).
+  sent?: boolean;
+  okk_comment?: string;
 }
 
 export interface MultiCheckHistoryEntry {

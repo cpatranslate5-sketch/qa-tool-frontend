@@ -9,7 +9,7 @@
 // a language has none, an "Общее примечание к языку" box) always has link
 // and note fields — review key "note|<lang>". Everything is saved to the
 // server on every change (see the script in reportHtml.ts).
-import type { Finding, TranslatorEntry } from "./types";
+import type { Finding, ReviewEntry, TranslatorEntry } from "./types";
 
 function esc(s: string): string {
   return String(s ?? "")
@@ -62,19 +62,26 @@ export function reviewFieldsHtml(): string {
       </label>
       <label class="rv-field">
         <span class="rv-label">Примечание:</span>
-        <textarea class="rv-note" rows="1" placeholder="Необязательно — увидит переводчик"></textarea>
+        <textarea class="rv-note" rows="1" placeholder="Необязательно"></textarea>
       </label>
     </div>`;
 }
 
-// What the translator answered on their page (read-only here).
-export function translatorAnswerHtml(tr: TranslatorEntry | undefined): string {
-  if (!tr || (!tr.decision && !(tr.comment || "").trim())) return "";
-  const verdict = tr.decision === "accept"
-    ? `<span class="rv-tr-yes">✓ принял</span>`
-    : tr.decision === "reject"
-      ? `<span class="rv-tr-no">✕ отклонил</span>`
+// What happened on the share page (read-only here): the head of QA's step
+// (sent on / comment for the translator) and the translator's answer.
+export function translatorAnswerHtml(tr: TranslatorEntry | undefined, entry?: ReviewEntry): string {
+  let out = "";
+  const okk = (entry?.okk_comment || "").trim();
+  if (entry?.sent) {
+    out += `<div class="rv-tr"><strong>ОКК:</strong> оставлено переводчику${okk ? ` — «${esc(okk)}»` : ""}</div>`;
+  }
+  if (!tr || (!tr.decision && !(tr.comment || "").trim())) return out;
+  const d = tr.decision === "accept" ? "done" : tr.decision === "reject" ? "na" : tr.decision;
+  const verdict = d === "done"
+    ? `<span class="rv-tr-yes">✓ правка внесена</span>`
+    : d === "na"
+      ? `<span class="rv-tr-no">✕ не актуально</span>`
       : "без решения";
   const comment = (tr.comment || "").trim();
-  return `<div class="rv-tr"><strong>Переводчик:</strong> ${verdict}${comment ? ` — «${esc(comment)}»` : ""}</div>`;
+  return out + `<div class="rv-tr rv-tr-answer"><strong>Переводчик:</strong> ${verdict}${comment ? ` — «${esc(comment)}»` : ""}${tr.checked ? ` · <span class="rv-tr-yes">☑ проверено</span>` : ""}</div>`;
 }

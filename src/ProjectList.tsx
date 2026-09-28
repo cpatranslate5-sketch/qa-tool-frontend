@@ -8,12 +8,14 @@ export default function ProjectList({
   onSwitchFolder,
   onOpenChangePassword,
   onOpenAliases,
+  onOpenSaved,
 }: {
   manager: Manager;
   onOpenProject: (project: Project) => void;
   onSwitchFolder: () => void;
   onOpenChangePassword: () => void;
   onOpenAliases: () => void;
+  onOpenSaved: () => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [newName, setNewName] = useState("");
@@ -47,6 +49,7 @@ export default function ProjectList({
       <div className="top-bar">
         <h1>Проекты — {manager.name}{manager.is_admin ? " (админ)" : ""}</h1>
         <div className="top-bar-actions">
+          <button className="link-button" onClick={onOpenSaved}>Сохранённое</button>
           <button className="link-button" onClick={onOpenAliases}>Словарь языков</button>
           <button className="link-button" onClick={onOpenChangePassword}>Сменить пароль</button>
           <button className="link-button" onClick={onSwitchFolder}>Сменить папку</button>

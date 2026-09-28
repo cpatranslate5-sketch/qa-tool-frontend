@@ -4,6 +4,7 @@ import ChangePasswordModal from "./ChangePasswordModal";
 import CheckRunner from "./CheckRunner";
 import FolderPicker from "./FolderPicker";
 import LanguageAliases from "./LanguageAliases";
+import SavedCases from "./SavedCases";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
 import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
@@ -14,7 +15,8 @@ type View =
   | { name: "projects" }
   | { name: "project"; project: Project }
   | { name: "check"; project: Project; openMultiCheckId?: number }
-  | { name: "aliases" };
+  | { name: "aliases" }
+  | { name: "saved" };
 
 // Keeps the manager on the exact screen they were on across a page reload
 // instead of dropping them back to the folder picker every time — Александр's
@@ -183,6 +185,7 @@ export default function App() {
           onSwitchFolder={handleSwitchFolder}
           onOpenChangePassword={() => setShowChangePassword(true)}
           onOpenAliases={openAliases}
+          onOpenSaved={() => setView({ name: "saved" })}
         />
       ) : view.name === "project" ? (
         <ProjectView
@@ -194,6 +197,8 @@ export default function App() {
         />
       ) : view.name === "aliases" ? (
         <LanguageAliases manager={manager} onBack={backToProjects} />
+      ) : view.name === "saved" ? (
+        <SavedCases manager={manager} onBack={backToProjects} />
       ) : (
         <CheckRunner
           manager={manager}

@@ -1,6 +1,7 @@
 import type {
   Finding,
   LanguageAlias,
+  SavedCase,
   Manager,
   MultiCheckHistoryEntry,
   MultiCheckResponse,
@@ -195,6 +196,17 @@ export function addLanguageAlias(managerId: number, alias: string, canonicalCode
 
 export function deleteLanguageAlias(aliasId: number, managerId: number): Promise<{ aliases: LanguageAlias[] }> {
   return request(`/language-aliases/${aliasId}?manager_id=${managerId}`, { method: "DELETE" });
+}
+
+// --- «Сохранённое» (2026-10-01): interesting cases saved from reports with
+// the 💾 button — shared by every folder, see app.main "Сохранённое" ---
+
+export function listSavedCases(): Promise<{ cases: SavedCase[] }> {
+  return request("/saved-cases");
+}
+
+export function deleteSavedCase(caseId: number, managerId: number): Promise<{ ok: boolean }> {
+  return request(`/saved-cases/${caseId}?manager_id=${managerId}`, { method: "DELETE" });
 }
 
 // --- checking: one text pair (single target language) ---

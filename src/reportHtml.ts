@@ -6,9 +6,9 @@
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
 import { alsoRowsSegments, TAG_COLOR, tagSegments, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
-import { generalKey, toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
+import { toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
 import { API_URL, multiCheckReportUrl } from "./api";
-import type { Finding, MultiCheckResponse, TranslatorEntry } from "./types";
+import type { Finding, MultiCheckResponse, ReviewEntry, TranslatorEntry } from "./types";
 
 function esc(s: string): string {
   return String(s ?? "")
@@ -35,7 +35,7 @@ function tagHtml(s: string): string {
 // when the finding carries actual exception text, each exception's real
 // wording is shown highlighted red instead of just its row number — both
 // per Александр's ask (2026-09-17); see lang.ts's registerSummarySegments.
-type ReviewInfo = { key: string; num: number; tr?: TranslatorEntry };
+type ReviewInfo = { key: string; num: number; tr?: TranslatorEntry; entry?: ReviewEntry };
 function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
   if (f.type === "register_summary") {
     const segments = registerSummarySegments(f);
@@ -47,7 +47,7 @@ function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
       ${reviewCornerHtml()}
       <span class="rv-num">№${rv.num}</span>
       <div class="finding-message">${inner}</div>
-      ${reviewFieldsHtml() + translatorAnswerHtml(rv.tr)}
+      ${reviewFieldsHtml() + translatorAnswerHtml(rv.tr, rv.entry)}
     </div>`;
   }
   const messageInner = alsoRowsSegments(f.message)
@@ -61,7 +61,7 @@ function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
       <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
       ${findingConfidence(f) != null ? `<span class="finding-type" title="Уверенность модели в этой находке">${findingConfidence(f)}%</span>` : ""}
       <div class="finding-message">${messageInner}</div>
-      ${rv ? reviewFieldsHtml() + translatorAnswerHtml(rv.tr) : ""}
+      ${rv ? reviewFieldsHtml() + translatorAnswerHtml(rv.tr, rv.entry) : ""}
     </div>
   `;
 }
@@ -154,7 +154,16 @@ const REPORT_CSS = `
   .rv-tr { margin: 8px -110px 0 0; font-size: 0.82rem; padding: 5px 8px; background: #fff; border: 1px dashed #c5cad3; border-radius: 6px; }
   .rv-tr-yes { color: #17703c; font-weight: 600; }
   .rv-tr-no { color: #b42318; font-weight: 600; }
-  .rv-bar { display: flex; margin: 10px 0 6px; flex-direction: column; align-items: stretch; background: #fff; border: 1px solid #dde1e7; border-radius: 10px; padding: 10px 12px; }
+  .rv-share-done { color: #166534; font-weight: 700; }
+  .multi-row { position: relative; }
+  .save-btn {
+    position: absolute; top: 8px; right: 10px; background: #fff; border: 1px solid #dde1e7; border-radius: 6px;
+    width: 30px; height: 28px; cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0;
+  }
+  .save-btn:hover { border-color: #6366f1; }
+  .save-btn.saved { cursor: default; }
+  .multi-row > .multi-row-header { padding-right: 40px; }
+  .rv-bar { display: flex; margin: 18px 0 6px; flex-direction: column; align-items: stretch; background: #fff; border: 1px solid #dde1e7; border-radius: 10px; padding: 10px 12px; }
   .rv-bar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .rv-share-btn {
     background: #4f46e5; color: #fff; border: none; border-radius: 999px; padding: 7px 16px;
@@ -242,9 +251,12 @@ const REVIEW_SCRIPT = `
     var box = document.getElementById("rv-share-box");
     if (!btn || !hint) return;
     var text = "";
+    var done = document.getElementById("rv-share-done");
     if (currentLang === "all") {
-      text = "Выберите один язык, чтобы подготовить ссылку для переводчика.";
+      text = "Выберите один язык, чтобы сгенерировать отчёт для переводчика.";
       btn.disabled = true;
+      btn.hidden = false;
+      done.hidden = true;
       box.hidden = true;
     } else {
       var keys = langKeys(currentLang);
@@ -261,7 +273,8 @@ const REVIEW_SCRIPT = `
       btn.disabled = false;
       var token = shares[currentLang];
       box.hidden = !token;
-      btn.textContent = token ? "🔗 Ссылка для переводчика создана" : "🔗 Ссылка для переводчика";
+      btn.hidden = !!token;
+      done.hidden = !token;
       if (token) {
         var url = RV_CFG.api + "/share/" + token;
         document.getElementById("rv-share-url").value = url;
@@ -283,14 +296,19 @@ const REVIEW_SCRIPT = `
   }
   function revokeShare() {
     if (currentLang === "all" || !shares[currentLang]) return;
-    if (!window.confirm("Отключить ссылку? Все, у кого она есть, больше не смогут её открыть.")) return;
+    if (!window.confirm("Удалить ссылку? Все, у кого она есть, больше не смогут её открыть, а ответы переводчика по этому языку обнулятся.")) return;
     var lang = currentLang;
     fetch(apiBase() + "/share/revoke", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ manager_id: RV_CFG.managerId, lang: lang })
-    }).then(function (r) { if (!r.ok) throw new Error(); delete shares[lang]; updateBar(); })
-      .catch(function () { setSaveState("⚠ Не удалось отключить ссылку."); });
+    }).then(function (r) {
+      if (!r.ok) throw new Error();
+      delete shares[lang];
+      // The translator's reactions for this language are reset on the server.
+      document.querySelectorAll('.lang-block[data-lang="' + (window.CSS && CSS.escape ? CSS.escape(lang) : lang) + '"] .rv-tr-answer').forEach(function (el) { el.parentNode.removeChild(el); });
+      updateBar();
+    }).catch(function () { setSaveState("⚠ Не удалось удалить ссылку."); });
   }
   function copyShare() {
     var input = document.getElementById("rv-share-url");
@@ -333,10 +351,23 @@ const REVIEW_SCRIPT = `
   });
   document.addEventListener("rv-lang", function (ev) { currentLang = ev.detail; updateBar(); });
   document.getElementById("rv-share-btn").addEventListener("click", function () {
-    if (shares[currentLang]) copyShare(); else createShare();
+    if (!shares[currentLang]) createShare();
   });
   document.getElementById("rv-share-copy").addEventListener("click", copyShare);
   document.getElementById("rv-share-revoke").addEventListener("click", revokeShare);
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest(".save-btn");
+    if (!b || b.classList.contains("saved") || b.disabled) return;
+    b.disabled = true;
+    fetch(apiBase() + "/save-case", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ manager_id: RV_CFG.managerId, sheet_idx: Number(b.getAttribute("data-sheet")), lang: b.getAttribute("data-lang"), excel_row: Number(b.getAttribute("data-row")) })
+    }).then(function (r) {
+      if (!r.ok) throw new Error();
+      b.classList.add("saved"); b.textContent = "✅"; b.title = "Сохранено в «Сохранённое»";
+    }).catch(function () { b.disabled = false; setSaveState("⚠ Не удалось сохранить блок."); });
+  });
   var seen = {};
   document.querySelectorAll(".rv-item[data-key]").forEach(function (el) {
     var k = el.getAttribute("data-key");
@@ -368,15 +399,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
     });
   }));
   const generalShown = new Set<string>();
-  const generalBoxHtml = (lang: string, title: string, inner: string) => {
-    generalShown.add(lang);
-    return `
-      <div class="multi-row rv-general">
-        <div class="multi-row-header">${esc(title)}</div>
-        ${inner}
-        ${reviewEnabled ? `<div class="rv-item rv-always" data-key="${esc(generalKey(lang))}">${reviewFieldsHtml()}</div>` : ""}
-      </div>`;
-  };
+  const savedKeys = new Set(result.saved_keys || []);
   const sheetsHtml = sheets.map((sheet, sheetIdx) => {
     const langsHtml = sheet.languages_checked.map(lang => {
       const rows = sheet.languages[lang] || [];
@@ -393,10 +416,15 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
           generalShown.add(lang);
           const key = toneKey(lang);
           reviewItems[key] = { lang, num: 1 };
-          return `<div class="multi-row rv-general"><div class="multi-row-header">Тон обращения</div>${findingHtml(tone, { key, num: 1, tr: translatorReview[key] })}</div>`;
+          return `<div class="multi-row rv-general"><div class="multi-row-header">Тон обращения</div>${findingHtml(tone, { key, num: 1, tr: translatorReview[key], entry: (result.review || {})[key] })}</div>`;
         }
         return `
             <div class="multi-row">
+              ${reviewEnabled && row.excel_row !== 0 ? (() => {
+                const sk = `${sheetIdx}|${lang}|${row.excel_row}`;
+                const saved = savedKeys.has(sk);
+                return `<button type="button" class="save-btn${saved ? " saved" : ""}" data-save="${esc(sk)}" data-sheet="${sheetIdx}" data-lang="${esc(lang)}" data-row="${row.excel_row}" title="${saved ? "Уже в «Сохранённом»" : "Сохранить блок в «Сохранённое»"}">${saved ? "✅" : "💾"}</button>`;
+              })() : ""}
               <div class="multi-row-header">${row.excel_row === 0 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
               ${row.excel_row === 0 ? "" : `<div class="pair">
                 <div><strong>Источник:</strong> ${tagHtml(row.source)}</div>
@@ -409,7 +437,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                   // №1 is reserved for the tone summary when there is one.
                   const num = (numByLang[lang] = (numByLang[lang] ?? (toneLangs.has(lang) ? 1 : 0)) + 1);
                   if (reviewEnabled) {
-                    rv = { key, num, tr: translatorReview[key] };
+                    rv = { key, num, tr: translatorReview[key], entry: (result.review || {})[key] };
                     reviewItems[key] = { lang, num };
                   }
                 }
@@ -424,13 +452,9 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
         const bt = b.excel_row === 0 && b.findings.some(f => f.type === "register_summary") ? 0 : 1;
         return at - bt;
       });
-      let head = "";
-      if (reviewEnabled && !toneLangs.has(lang) && !generalShown.has(lang)) {
-        head = generalBoxHtml(lang, "Общее примечание к языку", `<div class="muted">Ссылки и примечание ко всему языку — переводчик увидит их вверху своей страницы.</div>`);
-      }
-      const rowsHtml = rows.length === 0 && !head
+      const rowsHtml = rows.length === 0
         ? `<div class="muted">Проблем не найдено.</div>`
-        : head + ordered.map(rowHtml).join("");
+        : ordered.map(rowHtml).join("");
       return `
         <div class="lang-block" data-lang="${esc(lang)}">
           <h4 class="lang-block-title ${realCount > 0 ? "has-findings" : ""}">${esc(flagForLang(lang))} ${esc(lang)} — ${realCount > 0 ? `${realCount} найдено` : "без проблем"}</h4>
@@ -505,20 +529,21 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       : ""}
     ${unrecognized.length > 0 ? `<div class="info-box">Не распознаны как языки (пропущены): ${esc(unrecognized.join(", "))}</div>` : ""}
     ${filterBarHtml}
+    <div id="blocks-view">${sheetsHtml}</div>
     ${reviewEnabled && Object.keys(reviewItems).length > 0 ? `
     <div class="rv-bar">
       <div class="rv-bar-row">
-        <button type="button" id="rv-share-btn" class="rv-share-btn" disabled>🔗 Ссылка для переводчика</button>
+        <button type="button" id="rv-share-btn" class="rv-share-btn" disabled>Сгенерировать отчёт для переводчика</button>
+        <span id="rv-share-done" class="rv-share-done" hidden>Отчёт для переводчика сгенерирован!</span>
         <span id="rv-hint" class="muted"></span>
       </div>
       <div id="rv-share-box" class="rv-share-box" hidden>
         <input id="rv-share-url" class="rv-share-url" readonly />
         <button type="button" id="rv-share-copy" class="rv-small-btn">Скопировать</button>
         <a id="rv-share-open" class="rv-small-btn" target="_blank" rel="noopener noreferrer">Открыть</a>
-        <button type="button" id="rv-share-revoke" class="rv-small-btn rv-danger">Отключить ссылку</button>
+        <button type="button" id="rv-share-revoke" class="rv-small-btn rv-danger">Удалить ссылку</button>
       </div>
     </div>` : ""}
-    <div id="blocks-view">${sheetsHtml}</div>
   </div>
   <script>
     // Narrows the always-visible breakdown down to one language's findings
