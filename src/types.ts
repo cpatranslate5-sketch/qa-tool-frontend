@@ -8,6 +8,9 @@ export interface Project {
   id: number;
   name: string;
   created_by_name: string;
+  // Admin-written project description (subject area, audience, special
+  // requirements) — sent to the AI with every check in this project.
+  description?: string;
 }
 
 // One taught spelling in the global language-alias dictionary — see

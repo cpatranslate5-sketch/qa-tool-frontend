@@ -86,6 +86,17 @@ export function createProject(managerId: number, name: string, copyFromProjectId
   });
 }
 
+export function getProject(projectId: number): Promise<Project> {
+  return request(`/projects/${projectId}`);
+}
+
+export function updateProjectDescription(projectId: number, managerId: number, description: string): Promise<Project> {
+  return request(`/projects/${projectId}/description`, {
+    method: "PUT",
+    body: JSON.stringify({ manager_id: managerId, description }),
+  });
+}
+
 export function deleteProject(projectId: number, managerId: number, code: string): Promise<void> {
   return request(`/projects/${projectId}`, {
     method: "DELETE",

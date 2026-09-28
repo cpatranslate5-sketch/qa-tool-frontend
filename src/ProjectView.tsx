@@ -3,7 +3,9 @@ import {
   addCatalogLanguage,
   deleteCatalogLanguage,
   deleteProject,
+  getProject,
   knownLanguages,
+  updateProjectDescription,
 } from "./api";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { flagForLang } from "./lang";
@@ -105,6 +107,112 @@ function LanguageCatalogSection({
   );
 }
 
+// Ready-made description for betting/gambling projects — inserted by the
+// "Вставить шаблон" button, then editable like any other text.
+const BETTING_TEMPLATE =
+  "Тематика: беттинг и гемблинг — ставки на спорт, казино, слоты, live-казино, crash-игры, бонусы, " +
+  "акции и турниры. Все слова и термины толковать в значении этой области (например, «исход» — вариант " +
+  "ставки, а не итог матча; «отыгрыш» — требование прокрутить бонус). Тексты — маркетинговые " +
+  "(баннеры, пуши, посты) и правила акций.";
+
+// Admin-written project description, sent to the AI with every check in
+// this project (see the backend's _with_domain_note). Everyone sees it;
+// only the admin folder can edit it.
+function ProjectDescriptionSection({
+  isAdmin,
+  projectId,
+  managerId,
+  initial,
+}: {
+  isAdmin: boolean;
+  projectId: number;
+  managerId: number;
+  initial: string;
+}) {
+  const [saved, setSaved] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => {
+    setSaved(initial);
+    setDraft(initial);
+  }, [initial]);
+
+  async function save() {
+    setBusy(true);
+    setError("");
+    try {
+      const p = await updateProjectDescription(projectId, managerId, draft);
+      setSaved(p.description || "");
+      setDraft(p.description || "");
+      setEditing(false);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось сохранить описание.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <h2>Описание проекта</h2>
+      <p className="muted small">
+        Тематика, аудитория, особые требования. Нейросеть учитывает этот текст при каждой проверке в этом
+        проекте — например, чтобы понимать, что «исход» здесь — это вариант ставки.
+      </p>
+      {!editing && (
+        <>
+          {saved ? (
+            <p style={{ whiteSpace: "pre-wrap" }}>{saved}</p>
+          ) : (
+            <p className="muted small">Описание не задано.</p>
+          )}
+          {justSaved && <p className="muted small">✓ Сохранено</p>}
+          {isAdmin && (
+            <button type="button" className="link-button" onClick={() => { setDraft(saved); setEditing(true); }}>
+              {saved ? "Изменить описание" : "Добавить описание"}
+            </button>
+          )}
+        </>
+      )}
+      {editing && (
+        <div>
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            rows={6}
+            maxLength={4000}
+            style={{ width: "100%" }}
+            placeholder="Например: беттинг и гемблинг, аудитория — Индия, тон дружелюбный…"
+            autoFocus
+          />
+          <div className="muted small">{draft.length} / 4000</div>
+          <div className="inline-form" style={{ marginTop: 8, gap: 8, flexWrap: "wrap" }}>
+            <button type="button" onClick={save} disabled={busy}>{busy ? "Сохраняю…" : "Сохранить"}</button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setDraft(draft.trim() ? `${draft.trim()}\n\n${BETTING_TEMPLATE}` : BETTING_TEMPLATE)}
+              disabled={busy}
+            >
+              Вставить шаблон «Беттинг и гемблинг»
+            </button>
+            <button type="button" className="secondary" onClick={() => { setDraft(saved); setEditing(false); setError(""); }} disabled={busy}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <div className="error-box">{error}</div>}
+    </section>
+  );
+}
+
 export default function ProjectView({
   manager,
   project,
@@ -122,6 +230,8 @@ export default function ProjectView({
   onBack: () => void;
 }) {
   const [catalogLangs, setCatalogLangs] = useState<string[] | null>(null);
+  // Fetched fresh on open — the project object passed in may predate an edit.
+  const [description, setDescription] = useState(project.description || "");
   const [error, setError] = useState("");
 
   const [showDelete, setShowDelete] = useState(false);
@@ -131,6 +241,10 @@ export default function ProjectView({
 
   useEffect(() => {
     knownLanguages(project.id).then(r => setCatalogLangs(r.languages)).catch(() => setCatalogLangs([]));
+  }, [project.id]);
+
+  useEffect(() => {
+    getProject(project.id).then(p => setDescription(p.description || "")).catch(() => {});
   }, [project.id]);
 
   async function addLanguage(code: string) {
@@ -166,6 +280,13 @@ export default function ProjectView({
       </div>
 
       {error && <div className="error-box">{error}</div>}
+
+      <ProjectDescriptionSection
+        isAdmin={manager.is_admin}
+        projectId={project.id}
+        managerId={manager.id}
+        initial={description}
+      />
 
       <LanguageCatalogSection
         isAdmin={manager.is_admin}
