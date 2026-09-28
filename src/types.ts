@@ -170,6 +170,18 @@ export interface MultiCheckResponse {
   // for an older record from before this existed, or once the pass has
   // finished.
   second_opinion_pending?: boolean;
+  // Manager's per-finding review for the translators' table (2026-09-29):
+  // key "<sheet index>|<lang>|<excel row>|<finding index>" →
+  // decision ("accept"/"reject") + Crowdin link(s). See reportHtml.ts.
+  review?: Record<string, ReviewEntry>;
+  // Active translator links for this report, {lang: token} (2026-09-29).
+  shares?: Record<string, string>;
+}
+
+export interface ReviewEntry {
+  decision: "accept" | "reject" | null;
+  links: string;
+  note?: string;
 }
 
 export interface MultiCheckHistoryEntry {
