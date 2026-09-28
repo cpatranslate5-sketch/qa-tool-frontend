@@ -268,9 +268,11 @@ const REVIEW_SCRIPT = `
         else if (e.decision !== "reject") undecided++;
       });
       text = "Принято: " + accepted + (questions ? ", под вопросом: " + questions : "") + ", отклонено: " + (keys.length - accepted - questions - undecided) +
-        (undecided ? ", не отмечено: " + undecided + " (переводчик их не увидит)" : "") +
+        (undecided ? ", не отмечено: " + undecided + " — отметьте все, чтобы сгенерировать отчёт" : "") +
         (noLinks ? ". Без ссылки на Crowdin: " + noLinks : "") + ".";
-      btn.disabled = false;
+      // Only once every finding of this language has ✓, ? or ✕ (2026-10-01).
+      btn.disabled = undecided > 0;
+      btn.title = undecided > 0 ? "Сначала отметьте все замечания: ✓, ? или ✕" : "";
       var token = shares[currentLang];
       box.hidden = !token;
       btn.hidden = !!token;
@@ -284,7 +286,7 @@ const REVIEW_SCRIPT = `
     hint.textContent = text + (saveState ? " " + saveState : "");
   }
   function createShare() {
-    if (currentLang === "all") return;
+    if (currentLang === "all" || document.getElementById("rv-share-btn").disabled) return;
     var lang = currentLang;
     fetch(apiBase() + "/share", {
       method: "POST",
