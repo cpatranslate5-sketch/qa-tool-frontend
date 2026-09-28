@@ -5,7 +5,7 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { alsoRowsSegments, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, TAG_COLOR, tagSegments, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { generalKey, toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
 import { API_URL, multiCheckReportUrl } from "./api";
 import type { Finding, MultiCheckResponse, TranslatorEntry } from "./types";
@@ -17,6 +17,13 @@ function esc(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// Escaped text with its tags colored (see lang.ts tagSegments).
+function tagHtml(s: string): string {
+  return tagSegments(s)
+    .map(seg => (seg.tag ? `<span class="tag">${esc(seg.text)}</span>` : esc(seg.text)))
+    .join("");
 }
 
 // One finding, as HTML — mirrors CheckRunner.tsx's FindingRow: a
@@ -44,7 +51,7 @@ function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
     </div>`;
   }
   const messageInner = alsoRowsSegments(f.message)
-    .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : esc(seg.text)))
+    .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : tagHtml(seg.text)))
     .join("");
   return `
     <div class="finding finding-${esc(f.severity)}${rv ? " rv-item" : ""}"${rv ? ` data-key="${esc(rv.key)}"` : ""}>
@@ -111,6 +118,7 @@ const REPORT_CSS = `
   }
   .download-link:hover { text-decoration: underline; }
   .finding { position: relative; transition: background .15s; }
+  .tag { color: ${TAG_COLOR}; font-weight: 600; }
   .rv-item { padding-right: 118px; }
   .rv-item.accepted { background: #e7f6ec; }
   .rv-item.rejected { background: #fdecec; }
@@ -391,8 +399,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
             <div class="multi-row">
               <div class="multi-row-header">${row.excel_row === 0 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
               ${row.excel_row === 0 ? "" : `<div class="pair">
-                <div><strong>Источник:</strong> ${esc(row.source)}</div>
-                <div><strong>Перевод:</strong> ${esc(row.translation)}</div>
+                <div><strong>Источник:</strong> ${tagHtml(row.source)}</div>
+                <div><strong>Перевод:</strong> ${tagHtml(row.translation)}</div>
               </div>`}
               ${row.findings.map((f, fi) => {
                 let rv: ReviewInfo | null = null;

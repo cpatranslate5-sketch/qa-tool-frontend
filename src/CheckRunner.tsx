@@ -4,6 +4,7 @@ import {
   knownLanguages, listLanguageAliases, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
+import TagText from "./TagText";
 import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
@@ -51,7 +52,7 @@ function FindingRow({ f }: { f: Finding }) {
       )}
       <div className="finding-message">
         {alsoRowsSegments(f.message).map((seg, i) => (
-          <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.text}</span>
+          <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.color ? seg.text : <TagText text={seg.text} />}</span>
         ))}
       </div>
     </div>
@@ -1081,8 +1082,8 @@ export default function CheckRunner({
                         <div key={i} className="multi-row">
                           <div className="multi-row-header">Строка {row.excel_row} — {row.context || "без контекста"}</div>
                           <div className="history-pair">
-                            <div><strong>Источник:</strong> {row.source}</div>
-                            <div><strong>Перевод:</strong> {row.translation}</div>
+                            <div><strong>Источник:</strong> <TagText text={row.source} /></div>
+                            <div><strong>Перевод:</strong> <TagText text={row.translation} /></div>
                           </div>
                           {row.findings.map((f, fi) => <FindingRow key={fi} f={f} />)}
                         </div>

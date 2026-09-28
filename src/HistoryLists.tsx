@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { deleteMultiCheck, deleteSingleCheck, multiCheckDetail, multiCheckHistory, singleCheckHistory } from "./api";
+import TagText from "./TagText";
 import { flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realFindingCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { openReportInNewTab } from "./reportHtml";
 import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
@@ -192,8 +193,8 @@ export function SingleCheckHistoryList({
             {isOpen && (
               <div className="history-entry-detail">
                 <div className="history-pair">
-                  <div><strong>Источник:</strong> {h.source}</div>
-                  <div><strong>Перевод:</strong> {h.translation}</div>
+                  <div><strong>Источник:</strong> <TagText text={h.source} /></div>
+                  <div><strong>Перевод:</strong> <TagText text={h.translation} /></div>
                 </div>
                 {h.findings.map((f, i) => (
                   f.type === "register_summary" ? (

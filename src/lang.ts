@@ -380,3 +380,26 @@ export function describeModelsRu(modelsByLang?: Record<string, string>): string 
 export function findingConfidence(f: { confidence?: number }): number | null {
   return typeof f.confidence === "number" ? f.confidence : null;
 }
+
+// ---- Tags in texts (2026-09-30, Александр) ----
+// Placeholders/markup like {name}, {{amount}}, %s, %1$d, <b>, </br>, [link]
+// or   are shown in a distinct color in every report, so they stand
+// out from ordinary black text. Same pattern as the backend's placeholder
+// check (app/rule_checks.py PLACEHOLDER_RE) and the translator page.
+export const TAG_COLOR = "#c026d3";
+const TAG_RE = /\{\{?[^}]+\}?\}|%\d*\$?[sd]|<[^>]+>|\[[^\]]+\]|\\u[0-9a-fA-F]{4}/g;
+
+export function tagSegments(text: string): { text: string; tag: boolean }[] {
+  const s = String(text ?? "");
+  const out: { text: string; tag: boolean }[] = [];
+  let last = 0;
+  TAG_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = TAG_RE.exec(s)) !== null) {
+    if (m.index > last) out.push({ text: s.slice(last, m.index), tag: false });
+    out.push({ text: m[0], tag: true });
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) out.push({ text: s.slice(last), tag: false });
+  return out;
+}
