@@ -6,9 +6,9 @@
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
 import { alsoRowsSegments, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
-import { buildFilteredTableHtml, isReviewable, reviewKey, reviewWidgetHtml } from "./filteredReport";
+import { generalKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
 import { API_URL, multiCheckReportUrl } from "./api";
-import type { Finding, MultiCheckResponse } from "./types";
+import type { Finding, MultiCheckResponse, TranslatorEntry } from "./types";
 
 function esc(s: string): string {
   return String(s ?? "")
@@ -28,7 +28,8 @@ function esc(s: string): string {
 // when the finding carries actual exception text, each exception's real
 // wording is shown highlighted red instead of just its row number — both
 // per Александр's ask (2026-09-17); see lang.ts's registerSummarySegments.
-function findingHtml(f: Finding, rvKey: string | null = null): string {
+type ReviewInfo = { key: string; num: number; tr?: TranslatorEntry };
+function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
   if (f.type === "register_summary") {
     const segments = registerSummarySegments(f);
     const inner = segments
@@ -40,12 +41,14 @@ function findingHtml(f: Finding, rvKey: string | null = null): string {
     .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : esc(seg.text)))
     .join("");
   return `
-    <div class="finding finding-${esc(f.severity)}">
-      ${rvKey ? reviewWidgetHtml(rvKey) : ""}
+    <div class="finding finding-${esc(f.severity)}${rv ? " rv-item" : ""}"${rv ? ` data-key="${esc(rv.key)}"` : ""}>
+      ${rv ? reviewCornerHtml() : ""}
+      ${rv ? `<span class="rv-num">№${rv.num}</span>` : ""}
       <span class="finding-severity">${esc(SEVERITY_LABEL[f.severity] || f.severity)}</span>
       <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
       ${findingConfidence(f) != null ? `<span class="finding-type" title="Уверенность модели в этой находке">${findingConfidence(f)}%</span>` : ""}
       <div class="finding-message">${messageInner}</div>
+      ${rv ? reviewFieldsHtml() + translatorAnswerHtml(rv.tr) : ""}
     </div>
   `;
 }
@@ -96,39 +99,43 @@ const REPORT_CSS = `
   .lang-filter-btn:hover { border-color: #6366f1; }
   .lang-filter-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; font-weight: 600; }
   .lang-filter-btn.has-findings:not(.active) { border-color: #b45309; color: #b45309; font-weight: 600; }
-  .filter-toggle-btn {
-    background: #1c2230; border: none; border-radius: 999px; color: #fff;
-    cursor: pointer; font-size: 0.85rem; padding: 7px 16px; margin: 4px 0 14px;
-  }
-  .filter-toggle-btn:hover { opacity: 0.9; }
-  .filtered-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.82rem; background: #fff; }
-  .filtered-table th, .filtered-table td { border: 1px solid #dde1e7; padding: 6px 8px; text-align: left; vertical-align: top; }
-  .filtered-table thead { background: #f0f1f4; }
-  .pct-good { color: #17703c; font-weight: 700; }
   .download-link {
     display: inline-block; color: #6366f1; text-decoration: none;
     font-size: 0.85rem; margin: 10px 0 4px; font-weight: 600;
   }
   .download-link:hover { text-decoration: underline; }
-  .finding { position: relative; }
-  .review { float: right; margin: 0 0 4px 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-  .rv-cell .review { float: none; align-items: stretch; margin: 0; }
-  .rv-buttons { display: flex; gap: 4px; }
+  .finding { position: relative; transition: background .15s; }
+  .rv-item { padding-right: 84px; }
+  .rv-item.accepted { background: #e7f6ec; }
+  .rv-item.rejected { background: #fdecec; }
+  .rv-corner { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; }
+  .rv-num { font-weight: 700; margin-right: 8px; }
   .rv-btn {
-    width: 28px; height: 28px; border-radius: 6px; border: 1px solid #dde1e7; background: #fff;
-    cursor: pointer; font-size: 0.95rem; line-height: 1; color: #8a93a3;
+    width: 30px; height: 30px; border-radius: 6px; border: 1px solid; background: #fff;
+    cursor: pointer; font-size: 1rem; line-height: 1;
   }
-  .rv-accept:hover { border-color: #17703c; color: #17703c; }
-  .rv-reject:hover { border-color: #b42318; color: #b42318; }
-  .review.accepted .rv-accept { background: #17703c; border-color: #17703c; color: #fff; }
-  .review.rejected .rv-reject { background: #b42318; border-color: #b42318; color: #fff; }
-  .rv-links {
-    width: 230px; min-height: 28px; font: inherit; font-size: 0.78rem; padding: 4px 6px;
-    border: 1px solid #dde1e7; border-radius: 6px; resize: vertical;
+  .rv-accept { color: #17703c; border-color: #9fd5b3; }
+  .rv-reject { color: #b42318; border-color: #f0b4b4; }
+  .rv-item.accepted .rv-accept { background: #17703c; border-color: #17703c; color: #fff; }
+  .rv-item.rejected .rv-reject { background: #b42318; border-color: #b42318; color: #fff; }
+  .rv-fields { display: none; flex-direction: column; gap: 6px; margin: 10px -76px 2px 0; }
+  .rv-item.accepted .rv-fields, .rv-always .rv-fields { display: flex; }
+  .rv-always { padding-right: 0; }
+  .rv-always .rv-fields { margin-right: 0; }
+  .rv-field { display: flex; align-items: flex-start; gap: 10px; }
+  .rv-label {
+    flex: 0 0 170px; font-size: 0.8rem; font-weight: 600; color: #17703c; background: #fff;
+    border: 1px solid #9fd5b3; border-radius: 6px; padding: 5px 8px; cursor: text;
   }
-  .rv-cell .rv-links { width: 100%; min-width: 160px; }
-  .review.missing .rv-links { border-color: #b42318; background: #fff4f2; }
-  .rv-rejected-item { opacity: 0.55; }
+  .rv-always .rv-label { color: #4f46e5; border-color: #c7d2fe; }
+  .rv-links, .rv-note {
+    flex: 1 1 auto; min-height: 30px; font: inherit; font-size: 0.82rem; padding: 5px 8px;
+    border: 1px solid #dde1e7; border-radius: 6px; resize: vertical; background: #fff;
+  }
+  .rv-general { background: #f5f6ff; border-color: #c7d2fe; }
+  .rv-tr { margin: 8px -76px 0 0; font-size: 0.82rem; padding: 5px 8px; background: #fff; border: 1px dashed #c5cad3; border-radius: 6px; }
+  .rv-tr-yes { color: #17703c; font-weight: 600; }
+  .rv-tr-no { color: #b42318; font-weight: 600; }
   .rv-bar { display: flex; margin: 10px 0 6px; flex-direction: column; align-items: stretch; background: #fff; border: 1px solid #dde1e7; border-radius: 10px; padding: 10px 12px; }
   .rv-bar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .rv-share-btn {
@@ -144,9 +151,6 @@ const REPORT_CSS = `
     cursor: pointer; color: #1c2230; text-decoration: none;
   }
   .rv-danger { color: #b42318; }
-  .rv-lang-note { width: 100%; margin-top: 8px; font: inherit; font-size: 0.85rem; padding: 6px 8px; border: 1px solid #dde1e7; border-radius: 6px; resize: vertical; }
-  .rv-note { width: 230px; min-height: 28px; font: inherit; font-size: 0.78rem; padding: 4px 6px; border: 1px solid #dde1e7; border-radius: 6px; resize: vertical; }
-  .rv-cell .rv-note { width: 100%; min-width: 160px; }
 `;
 
 // projectId/managerId: only needed for the "Скачать отчёт (Excel)" link
@@ -175,7 +179,7 @@ const REVIEW_SCRIPT = `
     return RV_CFG.api + "/projects/" + RV_CFG.projectId + "/multi-check/" + RV_CFG.multiCheckId;
   }
   function sel(key) {
-    return document.querySelectorAll('.review[data-key="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]');
+    return document.querySelectorAll('.rv-item[data-key="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]');
   }
   function entry(key) {
     if (!RV_STATE[key]) RV_STATE[key] = { decision: null, links: "", note: "" };
@@ -190,8 +194,6 @@ const REVIEW_SCRIPT = `
       if (ta && ta !== skipEl) ta.value = e.links || "";
       var nt = w.querySelector(".rv-note");
       if (nt && nt !== skipEl) nt.value = e.note || "";
-      var item = w.closest(".finding, tr");
-      if (item) item.classList.toggle("rv-rejected-item", e.decision === "reject");
     });
   }
   function save(key) {
@@ -219,15 +221,12 @@ const REVIEW_SCRIPT = `
     var btn = document.getElementById("rv-share-btn");
     var hint = document.getElementById("rv-hint");
     var box = document.getElementById("rv-share-box");
-    var noteBox = document.getElementById("rv-lang-note-box");
-    var noteTa = document.getElementById("rv-lang-note");
     if (!btn || !hint) return;
     var text = "";
     if (currentLang === "all") {
       text = "Выберите один язык, чтобы подготовить ссылку для переводчика.";
       btn.disabled = true;
       box.hidden = true;
-      noteBox.hidden = true;
     } else {
       var keys = langKeys(currentLang);
       var undecided = 0, accepted = 0, noLinks = 0;
@@ -240,9 +239,6 @@ const REVIEW_SCRIPT = `
         (undecided ? ", не отмечено: " + undecided + " (переводчик их не увидит)" : "") +
         (noLinks ? ". Без ссылки на Crowdin: " + noLinks : "") + ".";
       btn.disabled = false;
-      noteBox.hidden = false;
-      var nkey = "note|" + currentLang;
-      if (document.activeElement !== noteTa) noteTa.value = (RV_STATE[nkey] || {}).note || "";
       var token = shares[currentLang];
       box.hidden = !token;
       btn.textContent = token ? "🔗 Ссылка для переводчика создана" : "🔗 Ссылка для переводчика";
@@ -291,26 +287,25 @@ const REVIEW_SCRIPT = `
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest(".rv-btn");
     if (!b) return;
-    var key = b.closest(".review").getAttribute("data-key");
+    var key = b.closest(".rv-item").getAttribute("data-key");
     var e = entry(key);
     var want = b.classList.contains("rv-accept") ? "accept" : "reject";
     e.decision = e.decision === want ? null : want;
     paint(key);
+    if (e.decision === "accept") {
+      var item = b.closest(".rv-item");
+      var first = item && item.querySelector(".rv-links");
+      if (first && !first.value) first.focus();
+    }
     updateBar();
     saveLater(key, 0);
   });
   document.addEventListener("input", function (ev) {
     var ta = ev.target;
     if (!ta.classList) return;
-    if (ta.id === "rv-lang-note") {
-      var nkey = "note|" + currentLang;
-      entry(nkey).note = ta.value;
-      saveLater(nkey, 700);
-      return;
-    }
     var field = ta.classList.contains("rv-links") ? "links" : ta.classList.contains("rv-note") ? "note" : null;
     if (!field) return;
-    var key = ta.closest(".review").getAttribute("data-key");
+    var key = ta.closest(".rv-item").getAttribute("data-key");
     entry(key)[field] = ta.value;
     paint(key, ta);
     updateBar();
@@ -322,7 +317,11 @@ const REVIEW_SCRIPT = `
   });
   document.getElementById("rv-share-copy").addEventListener("click", copyShare);
   document.getElementById("rv-share-revoke").addEventListener("click", revokeShare);
-  Object.keys(RV_ITEMS).forEach(function (k) { paint(k); });
+  var seen = {};
+  document.querySelectorAll(".rv-item[data-key]").forEach(function (el) {
+    var k = el.getAttribute("data-key");
+    if (!seen[k]) { seen[k] = true; paint(k); }
+  });
   updateBar();
 })();
 `;
@@ -336,31 +335,77 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
   // Review data for the translators'-table flow — only when the page knows
   // which check/folder it belongs to (it can then save decisions).
   const reviewEnabled = projectId != null && managerId != null;
-  const reviewItems: Record<string, { lang: string; message: string; order: number }> = {};
-  let reviewOrder = 0;
+  const reviewItems: Record<string, { lang: string; num: number }> = {};
+  const numByLang: Record<string, number> = {};
+  const translatorReview = result.translator_review || {};
+  // Languages that have a "Тон обращения" box somewhere — the others get an
+  // "Общее примечание к языку" box instead, so every language has a place
+  // for general links/notes (review key "note|<lang>").
+  const toneLangs = new Set<string>();
+  sheets.forEach(sheet => sheet.languages_checked.forEach(lang => {
+    (sheet.languages[lang] || []).forEach(row => {
+      if (row.excel_row === 0 && row.findings.some(f => f.type === "register_summary")) toneLangs.add(lang);
+    });
+  }));
+  const generalShown = new Set<string>();
+  const generalBoxHtml = (lang: string, title: string, inner: string) => {
+    generalShown.add(lang);
+    return `
+      <div class="multi-row rv-general">
+        <div class="multi-row-header">${esc(title)}</div>
+        ${inner}
+        ${reviewEnabled ? `<div class="rv-item rv-always" data-key="${esc(generalKey(lang))}">${reviewFieldsHtml()}</div>` : ""}
+      </div>`;
+  };
   const sheetsHtml = sheets.map((sheet, sheetIdx) => {
     const langsHtml = sheet.languages_checked.map(lang => {
       const rows = sheet.languages[lang] || [];
       const realCount = realRowCount(rows);
-      const rowsHtml = rows.length === 0
-        ? `<div class="muted">Проблем не найдено.</div>`
-        : rows.map(row => `
+      const rowHtml = (row: typeof rows[number]) => {
+        const tone = row.excel_row === 0 ? row.findings.find(f => f.type === "register_summary") : undefined;
+        if (tone) {
+          // Same language on a second sheet: show the tone line, but keep
+          // the one set of general fields on the first box only.
+          if (generalShown.has(lang) || !reviewEnabled) {
+            return `<div class="multi-row rv-general"><div class="multi-row-header">Тон обращения</div>${findingHtml(tone)}</div>`;
+          }
+          return generalBoxHtml(lang, "Тон обращения", findingHtml(tone));
+        }
+        return `
             <div class="multi-row">
-              <div class="multi-row-header">Строка ${row.excel_row} — ${esc(row.context || "без контекста")}</div>
-              <div class="pair">
+              <div class="multi-row-header">${row.excel_row === 0 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
+              ${row.excel_row === 0 ? "" : `<div class="pair">
                 <div><strong>Источник:</strong> ${esc(row.source)}</div>
                 <div><strong>Перевод:</strong> ${esc(row.translation)}</div>
-              </div>
+              </div>`}
               ${row.findings.map((f, fi) => {
-                let key: string | null = null;
-                if (reviewEnabled && isReviewable(row.excel_row, f)) {
-                  key = reviewKey(sheetIdx, lang, row.excel_row, fi);
-                  reviewItems[key] = { lang, message: f.message, order: reviewOrder++ };
+                let rv: ReviewInfo | null = null;
+                if (isReviewable(row.excel_row, f)) {
+                  const key = reviewKey(sheetIdx, lang, row.excel_row, fi);
+                  const num = (numByLang[lang] = (numByLang[lang] || 0) + 1);
+                  if (reviewEnabled) {
+                    rv = { key, num, tr: translatorReview[key] };
+                    reviewItems[key] = { lang, num };
+                  }
                 }
-                return findingHtml(f, key);
+                return findingHtml(f, rv);
               }).join("")}
             </div>
-          `).join("");
+          `;
+      };
+      // Tone box first, then the rows.
+      const ordered = [...rows].sort((a, b) => {
+        const at = a.excel_row === 0 && a.findings.some(f => f.type === "register_summary") ? 0 : 1;
+        const bt = b.excel_row === 0 && b.findings.some(f => f.type === "register_summary") ? 0 : 1;
+        return at - bt;
+      });
+      let head = "";
+      if (reviewEnabled && !toneLangs.has(lang) && !generalShown.has(lang)) {
+        head = generalBoxHtml(lang, "Общее примечание к языку", `<div class="muted">Ссылки и примечание ко всему языку — переводчик увидит их вверху своей страницы.</div>`);
+      }
+      const rowsHtml = rows.length === 0 && !head
+        ? `<div class="muted">Проблем не найдено.</div>`
+        : head + ordered.map(rowHtml).join("");
       return `
         <div class="lang-block" data-lang="${esc(lang)}">
           <h4 class="lang-block-title ${realCount > 0 ? "has-findings" : ""}">${esc(flagForLang(lang))} ${esc(lang)} — ${realCount > 0 ? `${realCount} найдено` : "без проблем"}</h4>
@@ -417,44 +462,6 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
     </div>
   ` : "";
 
-  // "Отфильтровать отчёт" — Александр's ask (2026-09-25): a second, more
-  // opinionated view of the SAME data, built entirely client-side (the
-  // backend already attached sonnet_percent to every finding — see
-  // app.claude_client.run_second_opinion, Sonnet-only since 2026-09-27)
-  // that collapses the normal per-language blocks into a table of only the
-  // findings Claude was convinced by (see filteredReport.ts for the exact
-  // rule, plus the Indian-language-only stricter threshold), with columns
-  // matching what Александр asked the FINAL report to consist of
-  // (2026-09-26, revised 2026-09-27 to drop the averaged-percent column
-  // now that only one model's score exists): № ошибки, № строки, Язык, Тон
-  // обращения, Источник, Перевод, Процент уверенности ИИ, Комментарий. One
-  // <tbody> per language inside it, so the language filter bar (via
-  // updateFilteredVisibility in the <script> below) can show just one
-  // language's filtered rows at a time, the same way it already narrows
-  // the normal blocks view.
-  //
-  // This is now the view the report OPENS on by default (see
-  // isFilteredDefault below) — it's meant to BE the report, not an optional
-  // extra a manager has to remember to click into. The old "📋 Скопировать"
-  // buttons (copyReport.ts) that used to sit above this — copy the whole
-  // report to the clipboard, paste it into any AI chat, get back a hand-
-  // built table shaped like this one — are gone (Александр's ask,
-  // 2026-09-26: "они больше не нужны, т.к. ты это сам запрашиваешь на
-  // этапе разбора отчёта"), since that manual step is now fully redundant
-  // with this automatic one: run_second_opinion already IS a real,
-  // automated Sonnet pass that reads a whole language's findings at once
-  // (the same "avoid row-by-row inconsistency" fix that manual feature
-  // existed to work around by hand) and this table already surfaces its
-  // result. Toggled with the blocks view purely by hiding/showing two
-  // containers — no re-render, no backend call.
-  const filteredTableHtml = buildFilteredTableHtml(sheets, allLangs);
-  // While the second-opinion percentages are still being computed in the
-  // background (see the info-box below), shouldKeepFinding's fail-safe
-  // keeps every finding, so the filtered table isn't actually filtering
-  // anything yet — opening straight into the normal, familiar blocks view
-  // in that case avoids a confusing "everything's still here, did this
-  // even do anything?" first impression.
-  const isFilteredDefault = !result.second_opinion_pending;
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -485,16 +492,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
         <a id="rv-share-open" class="rv-small-btn" target="_blank" rel="noopener noreferrer">Открыть</a>
         <button type="button" id="rv-share-revoke" class="rv-small-btn rv-danger">Отключить ссылку</button>
       </div>
-      <div id="rv-lang-note-box" hidden>
-        <textarea id="rv-lang-note" class="rv-lang-note" rows="2" placeholder="Общее примечание к этому языку для переводчика (необязательно)"></textarea>
-      </div>
     </div>` : ""}
-    ${result.second_opinion_pending ? `<div class="info-box">Процент уверенности ИИ для находок ещё досчитывается в фоне (обычно не дольше минуты) — пока он не готов, показан обычный (неотфильтрованный) отчёт. Закройте вкладку и откройте отчёт заново через минуту, чтобы увидеть отфильтрованную версию.</div>` : ""}
-    <div>
-      <button type="button" id="filter-toggle-btn" class="filter-toggle-btn">${isFilteredDefault ? "↩ Показать блоками" : "📋 Показать таблицей"}</button>
-    </div>
-    <div id="blocks-view" ${isFilteredDefault ? "hidden" : ""}>${sheetsHtml}</div>
-    <div id="filtered-view" ${isFilteredDefault ? "" : "hidden"}>${filteredTableHtml}</div>
+    <div id="blocks-view">${sheetsHtml}</div>
   </div>
   <script>
     // Narrows the always-visible breakdown down to one language's findings
@@ -504,16 +503,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
     // string built server-side and handed to an inline onclick="...") —
     // a language code comes straight from an uploaded file's column
     // header, so it isn't trustworthy enough to interpolate into a script
-    // string. Also drives the filtered table's own per-language <tbody>
-    // groups (see updateFilteredVisibility below) — Александр's ask
-    // (2026-09-25): "Отфильтровать отчёт" should only build/show the
-    // currently-open language's filtered rows, not every language at
-    // once, so the same language selection that already narrows the
-    // normal blocks view now narrows the filtered view too, live —
-    // whichever language tab is active when the filter button is
-    // clicked (or switched to afterwards) is what the filtered table
-    // shows, even if that switch happens while the filtered view is
-    // already the one on screen.
+    // string.
     function filterLang(lang, btn) {
       document.querySelectorAll(".lang-block").forEach(function (el) {
         el.hidden = lang !== "all" && el.getAttribute("data-lang") !== lang;
@@ -527,7 +517,6 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       document.querySelectorAll(".lang-filter-btn").forEach(function (b) {
         b.classList.toggle("active", b === btn);
       });
-      updateFilteredVisibility(lang);
       document.dispatchEvent(new CustomEvent("rv-lang", { detail: lang }));
     }
     document.querySelectorAll(".lang-filter-btn").forEach(function (btn) {
@@ -535,48 +524,6 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
         filterLang(btn.dataset.lang, btn);
       });
     });
-    // Shows/hides each language's own <tbody> in the filtered table (see
-    // filteredReport.ts — one <tbody data-lang="xx"> per language, so its
-    // "Тон обращения" cell always toggles together with the rows it spans,
-    // never partially) to match the language currently selected above.
-    // Every checked language always has its own <tbody> now (a language
-    // with nothing left after filtering still gets one row showing its
-    // tone of address — Александр's ask, 2026-09-27), so filtered-empty-row
-    // below is only ever a fallback for the degenerate "zero languages
-    // checked at all" case.
-    function updateFilteredVisibility(lang) {
-      var anyVisible = false;
-      document.querySelectorAll("#filtered-table tbody[data-lang]").forEach(function (tb) {
-        var show = lang === "all" || tb.getAttribute("data-lang") === lang;
-        tb.hidden = !show;
-        if (show) anyVisible = true;
-      });
-      var emptyRow = document.getElementById("filtered-empty-row");
-      if (emptyRow) emptyRow.hidden = anyVisible;
-    }
-    updateFilteredVisibility("all");
-    // "Отфильтровать отчёт" — a plain visibility toggle between the flat
-    // filtered table (the report's default view, see isFilteredDefault
-    // above) and the normal per-language blocks (both already fully built
-    // above, see filteredTableHtml/sheetsHtml) — reversible, so a manager
-    // who wants to double-check something against the full, unfiltered
-    // report can still switch to it without reopening the report. Reads
-    // which one is currently showing straight off the DOM (rather than a
-    // separate JS boolean duplicating the server-rendered "hidden"
-    // attributes above), so the two can never disagree.
-    (function () {
-      var toggleBtn = document.getElementById("filter-toggle-btn");
-      var blocksView = document.getElementById("blocks-view");
-      var filteredView = document.getElementById("filtered-view");
-      if (!toggleBtn || !blocksView || !filteredView) return;
-      var filtered = blocksView.hidden;
-      toggleBtn.addEventListener("click", function () {
-        filtered = !filtered;
-        blocksView.hidden = filtered;
-        filteredView.hidden = !filtered;
-        toggleBtn.textContent = filtered ? "↩ Показать блоками" : "📋 Показать таблицей";
-      });
-    })();
   </script>
   ${reviewEnabled ? `<script>
     var RV_CFG = ${jsonForScript({

@@ -176,6 +176,13 @@ export interface MultiCheckResponse {
   review?: Record<string, ReviewEntry>;
   // Active translator links for this report, {lang: token} (2026-09-29).
   shares?: Record<string, string>;
+  // Translators' answers from their share-link pages (2026-09-30), same keys.
+  translator_review?: Record<string, TranslatorEntry>;
+}
+
+export interface TranslatorEntry {
+  decision: "accept" | "reject" | null;
+  comment?: string;
 }
 
 export interface ReviewEntry {
