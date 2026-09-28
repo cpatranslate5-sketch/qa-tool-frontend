@@ -361,3 +361,22 @@ export function formatCostRu(usd: number): string {
   if (usd < 0.0001) decimals = 6;
   return `${usd.toFixed(decimals).replace(".", ",")} $`;
 }
+
+
+// 2026-09-29: which model checked which languages, grouped by model —
+// "Claude Opus: bn, hi; GPT Sol: kk, tr". Empty string when unknown (old reports).
+export function describeModelsRu(modelsByLang?: Record<string, string>): string {
+  if (!modelsByLang) return "";
+  const byModel: Record<string, string[]> = {};
+  for (const [lang, model] of Object.entries(modelsByLang)) {
+    (byModel[model] = byModel[model] || []).push(lang);
+  }
+  return Object.entries(byModel)
+    .map(([model, langs]) => `${model}: ${langs.join(", ")}`)
+    .join("; ");
+}
+
+// The checking model's own confidence for a finding, if known.
+export function findingConfidence(f: { confidence?: number }): number | null {
+  return typeof f.confidence === "number" ? f.confidence : null;
+}

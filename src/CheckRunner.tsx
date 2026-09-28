@@ -4,7 +4,7 @@ import {
   knownLanguages, listLanguageAliases, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
-import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import { notifyCheckFinished, requestNotificationPermission } from "./notify";
@@ -46,6 +46,9 @@ function FindingRow({ f }: { f: Finding }) {
     <div className={`finding finding-${f.severity}`}>
       <span className="finding-severity">{SEVERITY_LABEL[f.severity] || f.severity}</span>
       <span className="finding-type">{TYPE_LABEL[f.type] || f.type}</span>
+      {findingConfidence(f) != null && (
+        <span className="finding-type" title="Уверенность модели в этой находке">{findingConfidence(f)}%</span>
+      )}
       <div className="finding-message">
         {alsoRowsSegments(f.message).map((seg, i) => (
           <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.text}</span>
@@ -191,18 +194,8 @@ export default function CheckRunner({
   // --- optional comment ---
   const [comment, setComment] = useState("");
 
-  // "Срочно" — file mode only: forces the instant path (2x price) instead
-  // of Anthropic's cheaper but up-to-an-hour batch queue, for a big
-  // upload that can't wait — Александр asked for this after hitting the
-  // "проверяется в очереди" notice on an urgent file. Used to default to
-  // ON (his own earlier ask), but flipped to OFF on 2026-09-18 as part of
-  // his cost-cutting pass for the move to Opus — most checks don't
-  // actually need the instant path, so leaving it unticked by default
-  // means small/medium jobs already qualify for the batch queue's 50%
-  // discount on their own (see BATCH_THRESHOLD_CHARS), and a manager who
-  // genuinely needs an instant result for a big upload still ticks it
-  // by hand.
-  const [urgent, setUrgent] = useState(false);
+  // (The "Срочно" checkbox was removed 2026-09-29: every check now runs
+  // through the same live background path — see the backend's multi_check.)
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -587,7 +580,7 @@ export default function CheckRunner({
       } else {
         const file = fileInputRef.current?.files?.[0];
         if (!file) return;
-        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti, urgent);
+        const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti);
         setMultiResult(res);
         setMultiHistorySignal(s => s + 1);
       }
@@ -718,14 +711,6 @@ export default function CheckRunner({
               accept=".xlsx"
               onChange={e => onFileChosen(e.target.files?.[0])}
             />
-            <label className="check-chip" style={{ marginTop: 8 }}>
-              <input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} />
-              Срочно (дороже в 2 раза, без очереди)
-            </label>
-            <p className="muted small">
-              Обычно большой файл дешевле проверять через очередь Anthropic — до часа ожидания. Эта галочка
-              пропускает очередь и считает сразу, но по полной (в 2 раза дороже) цене.
-            </p>
             {sourceLang && fileName && (
               <div style={{ marginTop: 10 }}>
                 <button type="button" className="secondary" onClick={confirmSourceLang} disabled={confirmingSourceLang}>
@@ -1023,6 +1008,9 @@ export default function CheckRunner({
             {" "}Проверка завершена, стоимость составила: {formatCostRu(multiResult.cost_usd || 0)}.
             {durationText && <> Заняла: {durationText}.</>}
             {criteriaText && <> Критерии: {criteriaText}.</>}
+            {describeModelsRu(multiResult.summary.models_by_lang) && (
+              <> Модели: {describeModelsRu(multiResult.summary.models_by_lang)}.</>
+            )}
           </p>
           {unrecognized.length > 0 && (
             <div className="info-box">Не распознаны как языки (пропущены): {unrecognized.join(", ")}</div>

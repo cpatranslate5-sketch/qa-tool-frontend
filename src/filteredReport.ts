@@ -1,38 +1,12 @@
-// Builds the "Отфильтровать отчёт" table — Александр's ask, 2026-09-25,
-// the second half of the automatic-second-opinion feature (see
-// app.claude_client.run_second_opinion on the backend, which attaches
-// sonnet_percent to every real finding before the report ever reaches the
-// frontend). Clicking the button on the report page swaps the normal
-// per-language block view for a table of only the findings worth a
-// translator's attention, dropping the ones Claude wasn't convinced by.
+// The report's TABLE view (toggle "📋 Показать таблицей" on the report page).
 //
-// Filtering rule, Sonnet-only since 2026-09-27 (Александр removed GPT from
-// this step entirely — Step 1's search still uses GPT, this filtering pass
-// no longer does): a finding is REMOVED when sonnet_percent is below 40.
-// This is the original two-model rule (average below 49 AND the lower of
-// the two below 40, unless the higher was above 69) reduced to a single
-// score — plugging the same value in for both models collapses that
-// formula to exactly "below 40", so the threshold carries over unchanged
-// rather than being picked fresh. A finding missing sonnet_percent
-// entirely (Sonnet's key wasn't configured, or its call failed — see
-// run_second_opinion) is ALWAYS kept — there's no safe basis to remove
-// something Claude never got to judge.
-//
-// A second, stricter rule was added 2026-09-25 for Indian-language rows
-// specifically (Александр's follow-up ask): for hi/mr/te/hing/bd, a finding
-// is instead removed whenever sonnet_percent is under 49 (still only
-// Claude's score — that part of the rule never depended on GPT to begin
-// with), same fail-safe for a missing percent.
-//
-// Each language's rows render in their own <tbody data-lang="xx"> (see
-// buildFilteredTableHtml) so reportHtml.ts's language filter bar can show
-// or hide one language's findings at a time in this table too, not just
-// the normal blocks view — Александр's ask: "Отфильтровать отчёт" should
-// only build the currently-open language's table, and the whole report's
-// when "Все" is selected. "№ ошибки" is numbered per language (starting
-// over at 1 for each one) precisely so switching between "Все" and a single
-// language never makes the numbers jump around — a given finding's number
-// is fixed at build time, independent of what's currently shown/hidden.
+// 2026-09-29 redesign (Александр): no model filters the report any more on
+// the frontend. Each language is checked by one fixed model, which rates
+// its own confidence per finding, and the backend already drops everything
+// under 40% — so this table simply shows every finding the backend kept,
+// with that model's own percent. The old Sonnet "second opinion" threshold
+// (40, or 49 for Indian languages) is gone; old reports that only carry
+// sonnet_percent show it as-is, unfiltered.
 import { flagForLang, registerSummarySegments } from "./lang";
 import type { Finding, MultiCheckRowResult, MultiCheckSheetResult } from "./types";
 
@@ -55,40 +29,18 @@ function isRegisterSummary(f: Finding): boolean {
 // asking a model — see rule_checks.RULE_BASED_TYPES and run_second_
 // opinion's own comment), so they always clear the keep threshold on their
 // own; no special-casing needed here for them.
-export function shouldKeepFinding(f: Finding): boolean {
-  const s = f.sonnet_percent;
-  if (s == null) return true;
-  return s >= 40;
+export function shouldKeepFinding(_f: Finding): boolean {
+  return true;
 }
 
-// Александр's ask (2026-09-25, same day as the button itself): for these
-// specific target languages, require Claude's score to clear 49 instead of
-// 40 — see this module's top comment for the exact scope. Matched by base
-// subtag (before any "-region"), same normalization the backend uses for
-// its own hard-language list (claude_client.HARD_LANGUAGE_BASES), so a
-// regional variant of one of these still counts.
-const INDIAN_LANG_BASES = new Set(["hi", "mr", "te", "hing", "bd"]);
-
-function isIndianLang(lang: string): boolean {
-  return INDIAN_LANG_BASES.has(lang.trim().toLowerCase().split("-")[0]);
+function survivesFilter(_lang: string, _f: Finding): boolean {
+  return true;
 }
 
-// Combines the general keep rule above with the Indian-language-only
-// stricter threshold — the single predicate buildFilteredGroups actually
-// filters by, so the two rules can never accidentally be applied out of
-// order or only partially.
-function survivesFilter(lang: string, f: Finding): boolean {
-  const s = f.sonnet_percent;
-  if (s == null) return true;
-  const threshold = isIndianLang(lang) ? 49 : 40;
-  return s >= threshold;
-}
-
-// "Процент уверенности ИИ" cell content — Claude's own percent, shown in
-// green above 50 (Александр's ask), or "нет данных" when it never came
-// through (Sonnet's key wasn't configured, or its call failed).
+// "Процент уверенности ИИ" cell: the checking model's own percent (older
+// reports: the former second-opinion percent), green above 50.
 function confidenceCellHtml(f: Finding): string {
-  const pct = f.sonnet_percent;
+  const pct = typeof f.confidence === "number" ? f.confidence : f.sonnet_percent;
   if (pct == null) return "нет данных";
   const cls = pct > 50 ? ' class="pct-good"' : "";
   return `<span${cls}>${pct}%</span>`;
@@ -230,7 +182,7 @@ export function buildFilteredTableHtml(sheets: MultiCheckSheetResult[], langs: s
       ${bodyHtml}
       <tbody>
         <tr id="filtered-empty-row" hidden>
-          <td colspan="8" class="muted">После фильтрации не осталось находок, требующих внимания.</td>
+          <td colspan="8" class="muted">Проблем не найдено.</td>
         </tr>
       </tbody>
     </table>

@@ -54,6 +54,11 @@ export interface Finding {
   // sms_charset}) — set directly by the backend without ever asking a
   // model, so those are guaranteed, not just likely, to survive filtering.
   sonnet_percent?: number;
+  // 2026-09-29 redesign: the checking model's OWN confidence (0-100) in
+  // this finding — each language is checked by one fixed model, which rates
+  // its findings itself; anything under 40 is already dropped by the
+  // backend. Always 100 on algorithmic findings. Absent on old reports.
+  confidence?: number;
 }
 
 export interface SingleCheckHistoryEntry {
@@ -92,6 +97,8 @@ export interface MultiCheckSummary {
   rows_checked: number;
   languages_checked: string[];
   total_findings: number;
+  // Which model checked each language, e.g. {"hi": "Claude Opus"}.
+  models_by_lang?: Record<string, string>;
 }
 
 export interface MultiCheckResponse {

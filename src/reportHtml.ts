@@ -5,7 +5,7 @@
 // this project has none of) means no new dependency and no backend route:
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
-import { alsoRowsSegments, describeChecksRu, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { buildFilteredTableHtml } from "./filteredReport";
 import { multiCheckReportUrl } from "./api";
 import type { Finding, MultiCheckResponse } from "./types";
@@ -43,6 +43,7 @@ function findingHtml(f: Finding): string {
     <div class="finding finding-${esc(f.severity)}">
       <span class="finding-severity">${esc(SEVERITY_LABEL[f.severity] || f.severity)}</span>
       <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
+      ${findingConfidence(f) != null ? `<span class="finding-type" title="Уверенность модели в этой находке">${findingConfidence(f)}%</span>` : ""}
       <div class="finding-message">${messageInner}</div>
     </div>
   `;
@@ -243,7 +244,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
 <body>
   <div class="page">
     <h1>${esc(titleText)}</h1>
-    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}${(() => { const c = describeChecksRu(result.checks_run); return c ? ` Критерии: ${esc(c)}.` : ""; })()}</p>` : ""}
+    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}${(() => { const c = describeChecksRu(result.checks_run); return c ? ` Критерии: ${esc(c)}.` : ""; })()}${(() => { const m = describeModelsRu(summary.models_by_lang); return m ? ` Модели: ${esc(m)}.` : ""; })()}</p>` : ""}
     ${projectId != null && managerId != null
       ? `<div><a class="download-link" href="${esc(multiCheckReportUrl(projectId, result.multi_check_id, managerId))}" target="_blank" rel="noopener noreferrer">⬇ Скачать отчёт (Excel)</a></div>`
       : ""}
@@ -251,7 +252,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
     ${filterBarHtml}
     ${result.second_opinion_pending ? `<div class="info-box">Процент уверенности ИИ для находок ещё досчитывается в фоне (обычно не дольше минуты) — пока он не готов, показан обычный (неотфильтрованный) отчёт. Закройте вкладку и откройте отчёт заново через минуту, чтобы увидеть отфильтрованную версию.</div>` : ""}
     <div>
-      <button type="button" id="filter-toggle-btn" class="filter-toggle-btn">${isFilteredDefault ? "↩ Показать все находки" : "✅ Отфильтровать отчёт"}</button>
+      <button type="button" id="filter-toggle-btn" class="filter-toggle-btn">${isFilteredDefault ? "↩ Показать блоками" : "📋 Показать таблицей"}</button>
     </div>
     <div id="blocks-view" ${isFilteredDefault ? "hidden" : ""}>${sheetsHtml}</div>
     <div id="filtered-view" ${isFilteredDefault ? "" : "hidden"}>${filteredTableHtml}</div>
@@ -333,7 +334,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
         filtered = !filtered;
         blocksView.hidden = filtered;
         filteredView.hidden = !filtered;
-        toggleBtn.textContent = filtered ? "↩ Показать все находки" : "✅ Отфильтровать отчёт";
+        toggleBtn.textContent = filtered ? "↩ Показать блоками" : "📋 Показать таблицей";
       });
     })();
   </script>
