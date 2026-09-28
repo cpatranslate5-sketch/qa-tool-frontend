@@ -27,6 +27,10 @@ export function reviewKey(sheetIdx: number, lang: string, excelRow: number, find
   return `${sheetIdx}|${lang}|${excelRow}|${findingIdx}`;
 }
 
+export function toneKey(lang: string): string {
+  return `tone|${lang}`;
+}
+
 export function generalKey(lang: string): string {
   return `note|${lang}`;
 }
@@ -35,11 +39,14 @@ export function isReviewable(excelRow: number, f: Finding): boolean {
   return excelRow !== 0 && f.type !== "register_summary" && f.type !== "system";
 }
 
-// ✓ / ✕ in the finding's top-right corner.
+// ✓ / ? / ✕ in the finding's top-right corner. «?» = «под вопросом»: the
+// finding goes to the translator's page tinted yellow, where whoever opens
+// the link first decides «Оставить переводчику» or «Убрать».
 export function reviewCornerHtml(): string {
   return `
     <div class="rv-corner">
       <button type="button" class="rv-btn rv-accept" title="Включить для переводчика">✓</button>
+      <button type="button" class="rv-btn rv-question" title="Под вопросом — решит тот, кто откроет ссылку">?</button>
       <button type="button" class="rv-btn rv-reject" title="Отклонить">✕</button>
     </div>`;
 }

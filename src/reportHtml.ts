@@ -6,7 +6,7 @@
 // every value the page needs is already in the MultiCheckResponse we
 // already fetched.
 import { alsoRowsSegments, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
-import { generalKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
+import { generalKey, toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
 import { API_URL, multiCheckReportUrl } from "./api";
 import type { Finding, MultiCheckResponse, TranslatorEntry } from "./types";
 
@@ -35,7 +35,13 @@ function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
     const inner = segments
       .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : esc(seg.text)))
       .join("");
-    return `<div class="finding finding-info">${inner}</div>`;
+    if (!rv) return `<div class="finding finding-info">${inner}</div>`;
+    return `<div class="finding finding-info rv-item" data-key="${esc(rv.key)}">
+      ${reviewCornerHtml()}
+      <span class="rv-num">№${rv.num}</span>
+      <div class="finding-message">${inner}</div>
+      ${reviewFieldsHtml() + translatorAnswerHtml(rv.tr)}
+    </div>`;
   }
   const messageInner = alsoRowsSegments(f.message)
     .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : esc(seg.text)))
@@ -105,9 +111,13 @@ const REPORT_CSS = `
   }
   .download-link:hover { text-decoration: underline; }
   .finding { position: relative; transition: background .15s; }
-  .rv-item { padding-right: 84px; }
+  .rv-item { padding-right: 118px; }
   .rv-item.accepted { background: #e7f6ec; }
   .rv-item.rejected { background: #fdecec; }
+  .rv-item.question { background: #fff8db; }
+  .finding-info.rv-item:not(.accepted):not(.rejected):not(.question) { background: #eef2ff; }
+  .rv-question { color: #a16207; border-color: #f0d98c; font-weight: 700; }
+  .rv-item.question .rv-question { background: #eab308; border-color: #eab308; color: #fff; }
   .rv-corner { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; }
   .rv-num { font-weight: 700; margin-right: 8px; }
   .rv-btn {
@@ -118,8 +128,8 @@ const REPORT_CSS = `
   .rv-reject { color: #b42318; border-color: #f0b4b4; }
   .rv-item.accepted .rv-accept { background: #17703c; border-color: #17703c; color: #fff; }
   .rv-item.rejected .rv-reject { background: #b42318; border-color: #b42318; color: #fff; }
-  .rv-fields { display: none; flex-direction: column; gap: 6px; margin: 10px -76px 2px 0; }
-  .rv-item.accepted .rv-fields, .rv-always .rv-fields { display: flex; }
+  .rv-fields { display: none; flex-direction: column; gap: 6px; margin: 10px -110px 2px 0; }
+  .rv-item.accepted .rv-fields, .rv-item.question .rv-fields, .rv-always .rv-fields { display: flex; }
   .rv-always { padding-right: 0; }
   .rv-always .rv-fields { margin-right: 0; }
   .rv-field { display: flex; align-items: flex-start; gap: 10px; }
@@ -133,7 +143,7 @@ const REPORT_CSS = `
     border: 1px solid #dde1e7; border-radius: 6px; resize: vertical; background: #fff;
   }
   .rv-general { background: #f5f6ff; border-color: #c7d2fe; }
-  .rv-tr { margin: 8px -76px 0 0; font-size: 0.82rem; padding: 5px 8px; background: #fff; border: 1px dashed #c5cad3; border-radius: 6px; }
+  .rv-tr { margin: 8px -110px 0 0; font-size: 0.82rem; padding: 5px 8px; background: #fff; border: 1px dashed #c5cad3; border-radius: 6px; }
   .rv-tr-yes { color: #17703c; font-weight: 600; }
   .rv-tr-no { color: #b42318; font-weight: 600; }
   .rv-bar { display: flex; margin: 10px 0 6px; flex-direction: column; align-items: stretch; background: #fff; border: 1px solid #dde1e7; border-radius: 10px; padding: 10px 12px; }
@@ -190,6 +200,7 @@ const REVIEW_SCRIPT = `
     sel(key).forEach(function (w) {
       w.classList.toggle("accepted", e.decision === "accept");
       w.classList.toggle("rejected", e.decision === "reject");
+      w.classList.toggle("question", e.decision === "question");
       var ta = w.querySelector(".rv-links");
       if (ta && ta !== skipEl) ta.value = e.links || "";
       var nt = w.querySelector(".rv-note");
@@ -229,13 +240,14 @@ const REVIEW_SCRIPT = `
       box.hidden = true;
     } else {
       var keys = langKeys(currentLang);
-      var undecided = 0, accepted = 0, noLinks = 0;
+      var undecided = 0, accepted = 0, questions = 0, noLinks = 0;
       keys.forEach(function (k) {
         var e = RV_STATE[k] || {};
-        if (e.decision === "accept") { accepted++; if (!(e.links || "").trim()) noLinks++; }
+        if (e.decision === "accept") { accepted++; if (!(e.links || "").trim() && k.indexOf("tone|") !== 0) noLinks++; }
+        else if (e.decision === "question") questions++;
         else if (e.decision !== "reject") undecided++;
       });
-      text = "Принято: " + accepted + ", отклонено: " + (keys.length - accepted - undecided) +
+      text = "Принято: " + accepted + (questions ? ", под вопросом: " + questions : "") + ", отклонено: " + (keys.length - accepted - questions - undecided) +
         (undecided ? ", не отмечено: " + undecided + " (переводчик их не увидит)" : "") +
         (noLinks ? ". Без ссылки на Crowdin: " + noLinks : "") + ".";
       btn.disabled = false;
@@ -289,10 +301,10 @@ const REVIEW_SCRIPT = `
     if (!b) return;
     var key = b.closest(".rv-item").getAttribute("data-key");
     var e = entry(key);
-    var want = b.classList.contains("rv-accept") ? "accept" : "reject";
+    var want = b.classList.contains("rv-accept") ? "accept" : b.classList.contains("rv-question") ? "question" : "reject";
     e.decision = e.decision === want ? null : want;
     paint(key);
-    if (e.decision === "accept") {
+    if (e.decision === "accept" || e.decision === "question") {
       var item = b.closest(".rv-item");
       var first = item && item.querySelector(".rv-links");
       if (first && !first.value) first.focus();
@@ -364,12 +376,16 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       const rowHtml = (row: typeof rows[number]) => {
         const tone = row.excel_row === 0 ? row.findings.find(f => f.type === "register_summary") : undefined;
         if (tone) {
-          // Same language on a second sheet: show the tone line, but keep
-          // the one set of general fields on the first box only.
+          // The tone summary is a normal reviewable item, always №1 of its
+          // language (the backend's share page numbers it the same way).
+          // Same language on a second sheet: plain tone line only.
           if (generalShown.has(lang) || !reviewEnabled) {
             return `<div class="multi-row rv-general"><div class="multi-row-header">Тон обращения</div>${findingHtml(tone)}</div>`;
           }
-          return generalBoxHtml(lang, "Тон обращения", findingHtml(tone));
+          generalShown.add(lang);
+          const key = toneKey(lang);
+          reviewItems[key] = { lang, num: 1 };
+          return `<div class="multi-row rv-general"><div class="multi-row-header">Тон обращения</div>${findingHtml(tone, { key, num: 1, tr: translatorReview[key] })}</div>`;
         }
         return `
             <div class="multi-row">
@@ -382,7 +398,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                 let rv: ReviewInfo | null = null;
                 if (isReviewable(row.excel_row, f)) {
                   const key = reviewKey(sheetIdx, lang, row.excel_row, fi);
-                  const num = (numByLang[lang] = (numByLang[lang] || 0) + 1);
+                  // №1 is reserved for the tone summary when there is one.
+                  const num = (numByLang[lang] = (numByLang[lang] ?? (toneLangs.has(lang) ? 1 : 0)) + 1);
                   if (reviewEnabled) {
                     rv = { key, num, tr: translatorReview[key] };
                     reviewItems[key] = { lang, num };

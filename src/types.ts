@@ -186,7 +186,7 @@ export interface TranslatorEntry {
 }
 
 export interface ReviewEntry {
-  decision: "accept" | "reject" | null;
+  decision: "accept" | "question" | "reject" | null;
   links: string;
   note?: string;
 }
