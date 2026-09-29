@@ -199,10 +199,10 @@ export function deleteLanguageAlias(aliasId: number, managerId: number): Promise
 }
 
 // --- «Сохранённое» (2026-10-01): interesting cases saved from reports with
-// the 💾 button — shared by every folder, see app.main "Сохранённое" ---
+// the 💾 button — each folder sees only its own, see app.main "Сохранённое" ---
 
-export function listSavedCases(): Promise<{ cases: SavedCase[] }> {
-  return request("/saved-cases");
+export function listSavedCases(managerId: number): Promise<{ cases: SavedCase[] }> {
+  return request(`/saved-cases?manager_id=${managerId}`);
 }
 
 export function deleteSavedCase(caseId: number, managerId: number): Promise<{ ok: boolean }> {

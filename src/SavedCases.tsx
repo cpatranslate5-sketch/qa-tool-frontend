@@ -6,7 +6,7 @@ import type { Manager, SavedCase } from "./types";
 
 // «Сохранённое» (2026-10-01, Александр): interesting cases saved from
 // reports with the 💾 button at the top of a block — kept here for later,
-// shared by every folder (like the language dictionary). Each case is a
+// private to the folder that saved it (2026-10-01). Each case is a
 // copy, so it stays even if the original report is deleted.
 export default function SavedCases({ manager, onBack }: { manager: Manager; onBack: () => void }) {
   const [cases, setCases] = useState<SavedCase[] | null>(null);
@@ -14,13 +14,13 @@ export default function SavedCases({ manager, onBack }: { manager: Manager; onBa
   const [removingId, setRemovingId] = useState<number | null>(null);
 
   useEffect(() => {
-    listSavedCases()
+    listSavedCases(manager.id)
       .then(res => setCases(res.cases))
       .catch(() => {
         setCases([]);
         setError("Не удалось загрузить сохранённое.");
       });
-  }, []);
+  }, [manager.id]);
 
   async function handleDelete(c: SavedCase) {
     if (!window.confirm("Удалить этот кейс из «Сохранённого»?")) return;
@@ -46,7 +46,7 @@ export default function SavedCases({ manager, onBack }: { manager: Manager; onBa
       </div>
 
       <p className="muted small">
-        Интересные кейсы из отчётов — сохраняются кнопкой 💾 в углу блока. Список общий для всех папок.
+        Интересные кейсы из отчётов — сохраняются кнопкой 💾 в углу блока. Видно только вашей папке.
       </p>
 
       {error && <div className="error-box">{error}</div>}
@@ -72,8 +72,7 @@ export default function SavedCases({ manager, onBack }: { manager: Manager; onBa
             </div>
             <div className="muted small" style={{ marginBottom: 6 }}>
               {[c.project_name, c.filename].filter(Boolean).join(" · ")}
-              {c.saved_by_name ? ` · сохранил(а) ${c.saved_by_name}` : ""}
-              {c.created_at ? `, ${new Date(c.created_at).toLocaleDateString("ru-RU")}` : ""}
+              {c.created_at ? ` · ${new Date(c.created_at).toLocaleDateString("ru-RU")}` : ""}
             </div>
             <div className="history-pair">
               <div><strong>Источник:</strong> <TagText text={c.source} /></div>
