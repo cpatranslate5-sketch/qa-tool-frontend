@@ -123,7 +123,6 @@ const REPORT_CSS = `
   .rv-item.accepted { background: #e7f6ec; }
   .rv-item.rejected { background: #fdecec; }
   .rv-item.question { background: #fff8db; }
-  .finding-info.rv-item:not(.accepted):not(.rejected):not(.question) { background: #eef2ff; }
   .rv-question { color: #a16207; border-color: #f0d98c; font-weight: 700; }
   .rv-item.question .rv-question { background: #eab308; border-color: #eab308; color: #fff; }
   .rv-corner { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; }
@@ -150,7 +149,6 @@ const REPORT_CSS = `
     flex: 1 1 auto; min-height: 30px; font: inherit; font-size: 0.82rem; padding: 5px 8px;
     border: 1px solid #dde1e7; border-radius: 6px; resize: vertical; background: #fff;
   }
-  .rv-general { background: #f5f6ff; border-color: #c7d2fe; }
   .rv-tr { margin: 8px -110px 0 0; font-size: 0.82rem; padding: 5px 8px; background: #fff; border: 1px dashed #c5cad3; border-radius: 6px; }
   .rv-tr-yes { color: #17703c; font-weight: 600; }
   .rv-tr-no { color: #b42318; font-weight: 600; }
