@@ -243,49 +243,46 @@ const REVIEW_SCRIPT = `
   function langKeys(lang) {
     return Object.keys(RV_ITEMS).filter(function (k) { return RV_ITEMS[k].lang === lang; });
   }
+  // "*" = the all-languages report (2026-10-01): generated from the «Все»
+  // tab, once every finding of every language is marked.
+  function shareLang() { return currentLang === "all" ? "*" : currentLang; }
   function updateBar() {
     var btn = document.getElementById("rv-share-btn");
     var hint = document.getElementById("rv-hint");
     var box = document.getElementById("rv-share-box");
     if (!btn || !hint) return;
-    var text = "";
     var done = document.getElementById("rv-share-done");
-    if (currentLang === "all") {
-      text = "Выберите один язык, чтобы сгенерировать отчёт для переводчика.";
-      btn.disabled = true;
-      btn.hidden = false;
-      done.hidden = true;
-      box.hidden = true;
-    } else {
-      var keys = langKeys(currentLang);
-      var undecided = 0, accepted = 0, questions = 0, noLinks = 0;
-      keys.forEach(function (k) {
-        var e = RV_STATE[k] || {};
-        if (e.decision === "accept") { accepted++; if (!(e.links || "").trim() && k.indexOf("tone|") !== 0) noLinks++; }
-        else if (e.decision === "question") questions++;
-        else if (e.decision !== "reject") undecided++;
-      });
-      text = "Принято: " + accepted + (questions ? ", под вопросом: " + questions : "") + ", отклонено: " + (keys.length - accepted - questions - undecided) +
-        (undecided ? ", не отмечено: " + undecided + " — отметьте все, чтобы сгенерировать отчёт" : "") +
-        (noLinks ? ". Без ссылки на Crowdin: " + noLinks : "") + ".";
-      // Only once every finding of this language has ✓, ? or ✕ (2026-10-01).
-      btn.disabled = undecided > 0;
-      btn.title = undecided > 0 ? "Сначала отметьте все замечания: ✓, ? или ✕" : "";
-      var token = shares[currentLang];
-      box.hidden = !token;
-      btn.hidden = !!token;
-      done.hidden = !token;
-      if (token) {
-        var url = RV_CFG.api + "/share/" + token;
-        document.getElementById("rv-share-url").value = url;
-        document.getElementById("rv-share-open").href = url;
-      }
+    var all = currentLang === "all";
+    var keys = all ? Object.keys(RV_ITEMS) : langKeys(currentLang);
+    var undecided = 0, accepted = 0, questions = 0, noLinks = 0;
+    keys.forEach(function (k) {
+      var e = RV_STATE[k] || {};
+      if (e.decision === "accept") { accepted++; if (!(e.links || "").trim() && k.indexOf("tone|") !== 0) noLinks++; }
+      else if (e.decision === "question") questions++;
+      else if (e.decision !== "reject") undecided++;
+    });
+    var text = (all ? "Все языки. " : "") + "Принято: " + accepted + (questions ? ", под вопросом: " + questions : "") + ", отклонено: " + (keys.length - accepted - questions - undecided) +
+      (undecided ? ", не отмечено: " + undecided + " — отметьте все, чтобы сгенерировать отчёт" : "") +
+      (noLinks ? ". Без ссылки на Crowdin: " + noLinks : "") + ".";
+    // Only once every finding (of this language, or of all of them) has ✓, ? or ✕.
+    btn.disabled = undecided > 0;
+    btn.title = undecided > 0 ? "Сначала отметьте все замечания: ✓, ? или ✕" : "";
+    btn.textContent = all ? "Сгенерировать отчёт по всем языкам" : "Сгенерировать отчёт для переводчика";
+    done.textContent = all ? "Отчёт по всем языкам сгенерирован!" : "Отчёт для переводчика сгенерирован!";
+    var token = shares[shareLang()];
+    box.hidden = !token;
+    btn.hidden = !!token;
+    done.hidden = !token;
+    if (token) {
+      var url = RV_CFG.api + "/share/" + token;
+      document.getElementById("rv-share-url").value = url;
+      document.getElementById("rv-share-open").href = url;
     }
     hint.textContent = text + (saveState ? " " + saveState : "");
   }
   function createShare() {
-    if (currentLang === "all" || document.getElementById("rv-share-btn").disabled) return;
-    var lang = currentLang;
+    if (document.getElementById("rv-share-btn").disabled) return;
+    var lang = shareLang();
     fetch(apiBase() + "/share", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -295,9 +292,10 @@ const REVIEW_SCRIPT = `
       .catch(function () { setSaveState("⚠ Не удалось создать ссылку."); });
   }
   function revokeShare() {
-    if (currentLang === "all" || !shares[currentLang]) return;
-    if (!window.confirm("Удалить ссылку? Все, у кого она есть, больше не смогут её открыть. Ответы переводчика и решения руководителя ОКК по этому языку обнулятся — новый отчёт снова пройдёт проверку ОКК.")) return;
-    var lang = currentLang;
+    var lang = shareLang();
+    if (!shares[lang]) return;
+    var what = lang === "*" ? "по ВСЕМ языкам" : "по этому языку";
+    if (!window.confirm("Удалить ссылку? Все, у кого она есть, больше не смогут её открыть. Ответы переводчика и решения руководителя ОКК " + what + " обнулятся — новый отчёт снова пройдёт проверку ОКК.")) return;
     fetch(apiBase() + "/share/revoke", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -305,9 +303,10 @@ const REVIEW_SCRIPT = `
     }).then(function (r) {
       if (!r.ok) throw new Error();
       delete shares[lang];
-      // The translator's reactions for this language are reset on the server.
-      // …and the QA head's step starts over, so drop those lines too.
-      document.querySelectorAll('.lang-block[data-lang="' + (window.CSS && CSS.escape ? CSS.escape(lang) : lang) + '"] .rv-tr').forEach(function (el) { el.parentNode.removeChild(el); });
+      // The translator's reactions and the QA head's step are reset on the
+      // server for this language (or all of them), so drop those lines too.
+      var scope = lang === "*" ? ".lang-block" : '.lang-block[data-lang="' + (window.CSS && CSS.escape ? CSS.escape(lang) : lang) + '"]';
+      document.querySelectorAll(scope + " .rv-tr").forEach(function (el) { el.parentNode.removeChild(el); });
       updateBar();
     }).catch(function () { setSaveState("⚠ Не удалось удалить ссылку."); });
   }
