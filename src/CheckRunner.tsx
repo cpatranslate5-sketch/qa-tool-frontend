@@ -5,7 +5,7 @@ import {
   runCheck, verifyLanguages,
 } from "./api";
 import TagText from "./TagText";
-import { alsoRowsSegments, buildChecksToSend, CHECK_OPTIONS, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
+import { alsoRowsSegments, buildChecksToSend, describeCostByModelRu, CHECK_OPTIONS, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab } from "./reportHtml";
 import { notifyCheckFinished, requestNotificationPermission } from "./notify";
@@ -996,7 +996,8 @@ export default function CheckRunner({
           <h2>Результат — {multiResult.summary.total_findings} проблем в {multiResult.summary.languages_checked.length} языках</h2>
           <p className="muted small">
             Исходный язык: {multiResult.source_lang}. Строк проверено: {multiResult.summary.rows_checked}.
-            {" "}Проверка завершена, стоимость составила: {formatCostRu(multiResult.cost_usd || 0)}.
+            {" "}Проверка завершена, стоимость составила: {formatCostRu(multiResult.cost_usd || 0)}
+            {describeCostByModelRu(multiResult.summary?.cost_by_model) ? ` — ${describeCostByModelRu(multiResult.summary?.cost_by_model)}` : ""}.
             {durationText && <> Заняла: {durationText}.</>}
             {criteriaText && <> Критерии: {criteriaText}.</>}
             {describeModelsRu(multiResult.summary.models_by_lang) && (

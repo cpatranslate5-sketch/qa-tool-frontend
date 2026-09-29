@@ -354,6 +354,17 @@ export function formatDurationRu(createdAt?: string | null, completedAt?: string
 // so a fixed 2-decimal format would round almost everything down to
 // "0,00 $" and make the feature look broken — the precision is widened for
 // smaller amounts instead, so a genuine (if small) cost is always visible.
+// "Claude Opus: 0,83 $ (баланс Anthropic); GPT Sol: 0,59 $ (баланс OpenAI)" —
+// which vendor's balance each part of the cost comes from (2026-10-01).
+export function describeCostByModelRu(byModel?: Record<string, number>): string {
+  const entries = Object.entries(byModel || {}).filter(([, v]) => v > 0);
+  if (entries.length === 0) return "";
+  return entries
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, v]) => `${label}: ${formatCostRu(v)} (${label.startsWith("GPT") ? "OpenAI" : "Anthropic"})`)
+    .join("; ");
+}
+
 export function formatCostRu(usd: number): string {
   if (!usd || usd <= 0) return "0 $";
   let decimals = 2;

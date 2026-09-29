@@ -102,6 +102,8 @@ export interface MultiCheckSummary {
   total_findings: number;
   // Which model checked each language, e.g. {"hi": "Claude Opus"}.
   models_by_lang?: Record<string, string>;
+  // Cost split per model label, incl. the 18% top-up tax (2026-10-01).
+  cost_by_model?: Record<string, number>;
 }
 
 export interface MultiCheckResponse {
