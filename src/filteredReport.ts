@@ -72,7 +72,9 @@ export function reviewFieldsHtml(): string {
 export function translatorAnswerHtml(tr: TranslatorEntry | undefined, entry?: ReviewEntry): string {
   let out = "";
   const okk = (entry?.okk_comment || "").trim();
-  if (entry?.sent) {
+  if (entry?.okk_removed) {
+    out += `<div class="rv-tr"><strong>ОКК:</strong> <span class="rv-tr-no">убрано из отчёта для переводчика</span></div>`;
+  } else if (entry?.sent) {
     out += `<div class="rv-tr"><strong>ОКК:</strong> оставлено переводчику${okk ? ` — «${esc(okk)}»` : ""}</div>`;
   }
   if (!tr || (!tr.decision && !(tr.comment || "").trim())) return out;

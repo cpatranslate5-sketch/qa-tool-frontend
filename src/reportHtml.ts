@@ -298,7 +298,7 @@ const REVIEW_SCRIPT = `
   }
   function revokeShare() {
     if (currentLang === "all" || !shares[currentLang]) return;
-    if (!window.confirm("Удалить ссылку? Все, у кого она есть, больше не смогут её открыть, а ответы переводчика по этому языку обнулятся.")) return;
+    if (!window.confirm("Удалить ссылку? Все, у кого она есть, больше не смогут её открыть. Ответы переводчика и решения руководителя ОКК по этому языку обнулятся — новый отчёт снова пройдёт проверку ОКК.")) return;
     var lang = currentLang;
     fetch(apiBase() + "/share/revoke", {
       method: "POST",
@@ -308,7 +308,8 @@ const REVIEW_SCRIPT = `
       if (!r.ok) throw new Error();
       delete shares[lang];
       // The translator's reactions for this language are reset on the server.
-      document.querySelectorAll('.lang-block[data-lang="' + (window.CSS && CSS.escape ? CSS.escape(lang) : lang) + '"] .rv-tr-answer').forEach(function (el) { el.parentNode.removeChild(el); });
+      // …and the QA head's step starts over, so drop those lines too.
+      document.querySelectorAll('.lang-block[data-lang="' + (window.CSS && CSS.escape ? CSS.escape(lang) : lang) + '"] .rv-tr').forEach(function (el) { el.parentNode.removeChild(el); });
       updateBar();
     }).catch(function () { setSaveState("⚠ Не удалось удалить ссылку."); });
   }

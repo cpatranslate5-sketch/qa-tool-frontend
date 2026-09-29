@@ -210,6 +210,7 @@ export interface ReviewEntry {
   note?: string;
   // Set on the share page by the head of QA (2026-10-01).
   sent?: boolean;
+  okk_removed?: boolean;
   okk_comment?: string;
 }
 
