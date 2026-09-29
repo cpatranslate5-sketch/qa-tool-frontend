@@ -492,34 +492,24 @@ export default function CheckRunner({
     setTargetLangsMulti(prev => (prev.length === targetCandidates.length ? [] : [...targetCandidates]));
   }
 
-  // Resolves one pasted line to a real catalog code, in three steps:
-  // (1) an exact match against the catalog first (case-insensitive — "es"
-  // / "ES" / "Es" all hit "es"); (2) the global "Словарь языков" dictionary
-  // (aliasMap — see LanguageAliases.tsx), the SAME lookup file-column
-  // detection already uses, so a spelling taught there (e.g. "ZA" for
-  // Swahili, "MD" for Romanian — a client's own export uses different
-  // labels than this project's catalog) is recognized here too, not just
-  // when parsing an uploaded file; (3) only if still unmatched, a match by
-  // base language alone (e.g. a plain "PT" resolving to the catalog's
-  // "pt-br" — but NOT if the catalog had both "pt-br" and "pt-pt", where a
-  // bare "pt" can't safely pick one on its own and is left unmatched
-  // instead of guessing). A taught alias that resolves to a code with
-  // several catalog variants goes through the same unambiguous-base-match
-  // rule as step 3, rather than guessing between them either.
+  // Resolves one pasted line to a real catalog code — strictly, no guessing
+  // (Александр, 2026-10-01): (1) the line itself, case-insensitive, after
+  // the same spelling normalization the backend uses for file headers
+  // ("ES (AR)" / "ES AR" → "es-ar"); (2) the global «Словарь языков»
+  // (aliasMap). Only an IDENTICAL catalog code counts — "MX" never lands on
+  // "es-ar" just because both are Spanish.
+  function normalizeLangLabel(raw: string): string {
+    const t = raw.trim();
+    const m = /^([A-Za-z]{2,3})\s*\(\s*([A-Za-z0-9]{2,3})\s*\)$/.exec(t) || /^([A-Z]{2,3})\s+([A-Z0-9]{2,3})$/.exec(t);
+    return m ? `${m[1]}-${m[2]}`.toLowerCase() : t.toLowerCase();
+  }
   function resolveLangCode(raw: string): string | null {
     const norm = raw.trim().toLowerCase();
     if (!norm) return null;
-    const exact = targetCandidates.find(c => c.toLowerCase() === norm);
-    if (exact) return exact;
+    const byCode = (code: string) => targetCandidates.find(c => c.toLowerCase() === code.toLowerCase()) || null;
     const aliasHit = aliasMap[norm];
-    if (aliasHit) {
-      const aliasExact = targetCandidates.find(c => c.toLowerCase() === aliasHit.toLowerCase());
-      if (aliasExact) return aliasExact;
-      const aliasByBase = targetCandidates.filter(c => baseLang(c) === baseLang(aliasHit));
-      if (aliasByBase.length === 1) return aliasByBase[0];
-    }
-    const byBase = targetCandidates.filter(c => baseLang(c) === norm);
-    return byBase.length === 1 ? byBase[0] : null;
+    if (aliasHit) return byCode(aliasHit);
+    return byCode(norm) || byCode(normalizeLangLabel(raw));
   }
 
   function applyLangList() {
