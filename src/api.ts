@@ -279,6 +279,12 @@ export function multiCheckHistory(projectId: number, managerId: number): Promise
   return request(`/projects/${projectId}/multi-check?manager_id=${managerId}`);
 }
 
+// Report page for a single («точечная») check — the backend turns it into a
+// report record once, so the whole review / translator-link flow works.
+export function singleCheckReport(projectId: number, singleCheckId: number, managerId: number): Promise<{ multi_check_id: number }> {
+  return request(`/projects/${projectId}/history/${singleCheckId}/report?manager_id=${managerId}`, { method: "POST" });
+}
+
 export function multiCheckDetail(projectId: number, multiCheckId: number, managerId: number): Promise<MultiCheckResponse> {
   return request(`/projects/${projectId}/multi-check/${multiCheckId}?manager_id=${managerId}`);
 }

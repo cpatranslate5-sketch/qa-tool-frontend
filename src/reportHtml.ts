@@ -7,7 +7,7 @@
 // already fetched.
 import { describeCostByModelRu, alsoRowsSegments, TAG_COLOR, tagSegments, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
-import { API_URL, multiCheckReportUrl } from "./api";
+import { API_URL, multiCheckDetail, multiCheckReportUrl, singleCheckReport } from "./api";
 import type { Finding, MultiCheckResponse, ReviewEntry, TranslatorEntry } from "./types";
 
 function esc(s: string): string {
@@ -590,6 +590,15 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
   <script>${REVIEW_SCRIPT}</script>` : ""}
 </body>
 </html>`;
+}
+
+// Report for a single («точечная») check (2026-10-01): same page and flow.
+export function openSingleCheckReport(projectId: number, singleCheckId: number, managerId: number): Promise<boolean> {
+  return openReportInNewTab(
+    () => singleCheckReport(projectId, singleCheckId, managerId).then(r => multiCheckDetail(projectId, r.multi_check_id, managerId)),
+    projectId,
+    managerId,
+  );
 }
 
 // Opens a blank tab synchronously (so it isn't blocked as a popup — it must

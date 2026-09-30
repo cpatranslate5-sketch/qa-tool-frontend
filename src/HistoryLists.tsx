@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 import { deleteMultiCheck, deleteSingleCheck, multiCheckDetail, multiCheckHistory, singleCheckHistory } from "./api";
 import TagText from "./TagText";
 import { flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realFindingCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
-import { openReportInNewTab } from "./reportHtml";
+import { openReportInNewTab, openSingleCheckReport } from "./reportHtml";
 import type { Manager, MultiCheckHistoryEntry, Project, SingleCheckHistoryEntry } from "./types";
 
 // Both lists below are self-contained: they fetch their own data (scoped to
@@ -192,6 +192,14 @@ export function SingleCheckHistoryList({
             </div>
             {isOpen && (
               <div className="history-entry-detail">
+                <button
+                  type="button"
+                  className="link-button"
+                  style={{ marginBottom: 6 }}
+                  onClick={() => openSingleCheckReport(project.id, h.id, manager.id)}
+                >
+                  📄 Открыть отчёт (для отметок и ссылки переводчику)
+                </button>
                 <div className="history-pair">
                   <div><strong>Источник:</strong> <TagText text={h.source} /></div>
                   <div><strong>Перевод:</strong> <TagText text={h.translation} /></div>

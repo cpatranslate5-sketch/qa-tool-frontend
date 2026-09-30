@@ -7,7 +7,7 @@ import {
 import TagText from "./TagText";
 import { alsoRowsSegments, buildChecksToSend, describeCostByModelRu, CHECK_OPTIONS, describeChecksRu, describeModelsRu, findingConfidence, findingCountInRows, flagForLang, formatCostRu, formatDurationRu, formatElapsedMinutesRu, realRowCount, registerSummarySegments, SEVERITY_LABEL, TYPE_LABEL } from "./lang";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
-import { openReportInNewTab } from "./reportHtml";
+import { openReportInNewTab, openSingleCheckReport } from "./reportHtml";
 import { notifyCheckFinished, requestNotificationPermission } from "./notify";
 import type {
   Finding, Manager, MultiCheckResponse,
@@ -202,6 +202,7 @@ export default function CheckRunner({
   const [error, setError] = useState("");
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [singleCost, setSingleCost] = useState(0);
+  const [singleCheckId, setSingleCheckId] = useState<number | null>(null);
   const [multiResult, setMultiResult] = useState<MultiCheckResponse | null>(null);
   const [polling, setPolling] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -550,6 +551,7 @@ export default function CheckRunner({
     setLoading(true);
     setError("");
     setFindings(null);
+    setSingleCheckId(null);
     setMultiResult(null);
     const checksToSend = buildChecksToSend(checks);
     try {
@@ -567,6 +569,7 @@ export default function CheckRunner({
         });
         setFindings(res.findings);
         setSingleCost(res.cost_usd);
+        setSingleCheckId(res.single_check_id);
         setSingleHistorySignal(s => s + 1);
       } else {
         const file = fileInputRef.current?.files?.[0];
@@ -905,6 +908,16 @@ export default function CheckRunner({
         <div className="results">
           <h2>Результат</h2>
           <p className="muted small">Проверка завершена, стоимость составила: {formatCostRu(singleCost)}</p>
+          {singleCheckId != null && (
+            <button
+              type="button"
+              className="link-button"
+              style={{ marginBottom: 8 }}
+              onClick={() => openSingleCheckReport(project.id, singleCheckId, manager.id)}
+            >
+              📄 Открыть отчёт (для отметок и ссылки переводчику)
+            </button>
+          )}
           {findings.length === 0 && <div className="muted">Проблем не найдено.</div>}
           {findings.map((f, i) => <FindingRow key={i} f={f} />)}
         </div>
