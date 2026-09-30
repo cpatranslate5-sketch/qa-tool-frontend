@@ -152,6 +152,9 @@ const REPORT_CSS = `
   .rv-tr { margin: 8px -110px 0 0; font-size: 0.82rem; padding: 5px 8px; background: #fff; border: 1px dashed #c5cad3; border-radius: 6px; }
   .rv-tr-yes { color: #17703c; font-weight: 600; }
   .rv-tr-no { color: #b42318; font-weight: 600; }
+  .rv-link-warn { margin-top: 8px; color: #b42318; background: #fff4f2; border: 1px solid #f0b4b4; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; font-weight: 600; }
+  .rv-item.missing-link { box-shadow: inset 0 0 0 2px #dc2626; }
+  .rv-item.missing-link .rv-links { border-color: #dc2626; background: #fff4f2; }
   .rv-share-done { color: #166534; font-weight: 700; }
   .multi-row { position: relative; }
   .save-btn {
@@ -210,12 +213,18 @@ const REVIEW_SCRIPT = `
     if (!RV_STATE[key]) RV_STATE[key] = { decision: null, links: "", note: "" };
     return RV_STATE[key];
   }
+  function needsLink(key) {
+    var e = RV_STATE[key] || {};
+    return key.indexOf("tone|") !== 0 && (e.decision === "accept" || e.decision === "question");
+  }
   function paint(key, skipEl) {
     var e = RV_STATE[key] || { decision: null, links: "", note: "" };
     sel(key).forEach(function (w) {
       w.classList.toggle("accepted", e.decision === "accept");
       w.classList.toggle("rejected", e.decision === "reject");
       w.classList.toggle("question", e.decision === "question");
+      // ✓ / ? without a Crowdin link blocks the report (tone №1 excepted).
+      w.classList.toggle("missing-link", needsLink(key) && !(e.links || "").trim());
       var ta = w.querySelector(".rv-links");
       if (ta && ta !== skipEl) ta.value = e.links || "";
       var nt = w.querySelector(".rv-note");
@@ -257,16 +266,25 @@ const REVIEW_SCRIPT = `
     var undecided = 0, accepted = 0, questions = 0, noLinks = 0;
     keys.forEach(function (k) {
       var e = RV_STATE[k] || {};
-      if (e.decision === "accept") { accepted++; if (!(e.links || "").trim() && k.indexOf("tone|") !== 0) noLinks++; }
+      if (needsLink(k) && !(e.links || "").trim()) noLinks++;
+      if (e.decision === "accept") accepted++;
       else if (e.decision === "question") questions++;
       else if (e.decision !== "reject") undecided++;
     });
     var text = (all ? "Все языки. " : "") + "Принято: " + accepted + (questions ? ", под вопросом: " + questions : "") + ", отклонено: " + (keys.length - accepted - questions - undecided) +
-      (undecided ? ", не отмечено: " + undecided + " — отметьте все, чтобы сгенерировать отчёт" : "") +
-      (noLinks ? ". Без ссылки на Crowdin: " + noLinks : "") + ".";
-    // Only once every finding (of this language, or of all of them) has ✓, ? or ✕.
-    btn.disabled = undecided > 0;
-    btn.title = undecided > 0 ? "Сначала отметьте все замечания: ✓, ? или ✕" : "";
+      (undecided ? ", не отмечено: " + undecided + " — отметьте все, чтобы сгенерировать отчёт" : "") + ".";
+    // Only once every finding has ✓, ? or ✕ AND every ✓ / ? has a Crowdin link.
+    btn.disabled = undecided > 0 || noLinks > 0;
+    btn.title = undecided > 0 ? "Сначала отметьте все замечания: ✓, ? или ✕"
+      : noLinks > 0 ? "Сначала добавьте ссылки на Crowdin ко всем замечаниям с ✓ и ?" : "";
+    var warn = document.getElementById("rv-link-warn");
+    if (warn) {
+      warn.hidden = !noLinks || !!shares[shareLang()];
+      warn.textContent = noLinks
+        ? "⚠ Отчёт нельзя сгенерировать: у " + noLinks + " " + (noLinks % 10 === 1 && noLinks % 100 !== 11 ? "замечания" : "замечаний") +
+          " с ✓ или ? нет ссылки на Crowdin. Они подсвечены красной рамкой — добавьте ссылку в поле «Добавить ссылку(и)»."
+        : "";
+    }
     btn.textContent = all ? "Сгенерировать отчёт по всем языкам" : "Сгенерировать отчёт для переводчика";
     done.textContent = all ? "Отчёт по всем языкам сгенерирован!" : "Отчёт для переводчика сгенерирован!";
     var token = shares[shareLang()];
@@ -287,9 +305,12 @@ const REVIEW_SCRIPT = `
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ manager_id: RV_CFG.managerId, lang: lang })
-    }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+    }).then(function (r) {
+      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.detail || ""); });
+      return r.json();
+    })
       .then(function (d) { shares[lang] = d.token; updateBar(); copyShare(); })
-      .catch(function () { setSaveState("⚠ Не удалось создать ссылку."); });
+      .catch(function (err) { setSaveState("⚠ " + ((err && err.message) || "Не удалось создать ссылку.")); });
   }
   function revokeShare() {
     var lang = shareLang();
@@ -537,6 +558,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
         <span id="rv-share-done" class="rv-share-done" hidden>Отчёт для переводчика сгенерирован!</span>
         <span id="rv-hint" class="muted"></span>
       </div>
+      <div id="rv-link-warn" class="rv-link-warn" hidden></div>
       <div id="rv-share-box" class="rv-share-box" hidden>
         <input id="rv-share-url" class="rv-share-url" readonly />
         <button type="button" id="rv-share-copy" class="rv-small-btn">Скопировать</button>
