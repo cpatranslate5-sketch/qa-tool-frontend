@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { createProject, listProjects } from "./api";
-import type { Manager, Project } from "./types";
+import { createClient, createProject, listClients, listProjects, setProjectClient } from "./api";
+import type { ClientEntry, Manager, Project } from "./types";
 
+// Main screen: «Заказчики» (2026-10-04) — each client with its styleguide
+// button and its projects — then projects without a client.
 export default function ProjectList({
   manager,
   onOpenProject,
+  onOpenClientStyleguide,
   onSwitchFolder,
   onOpenChangePassword,
   onOpenAliases,
@@ -12,20 +15,27 @@ export default function ProjectList({
 }: {
   manager: Manager;
   onOpenProject: (project: Project) => void;
+  onOpenClientStyleguide: (client: ClientEntry) => void;
   onSwitchFolder: () => void;
   onOpenChangePassword: () => void;
   onOpenAliases: () => void;
   onOpenSaved: () => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [clients, setClients] = useState<ClientEntry[] | null>(null);
   const [newName, setNewName] = useState("");
   const [copyFromId, setCopyFromId] = useState("");
+  const [newClientId, setNewClientId] = useState("");
+  const [newClientName, setNewClientName] = useState("");
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
+  function reload() {
     listProjects().then(setProjects).catch(() => setError("Не удалось загрузить список проектов."));
-  }, []);
+    listClients().then(setClients).catch(() => setClients([]));
+  }
+
+  useEffect(reload, []);
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -34,15 +44,33 @@ export default function ProjectList({
     setError("");
     try {
       const project = await createProject(manager.id, newName.trim(), copyFromId ? Number(copyFromId) : undefined);
-      setProjects(prev => [...(prev || []), project].sort((a, b) => a.name.localeCompare(b.name)));
+      if (newClientId) await setProjectClient(project.id, manager.id, Number(newClientId));
       setNewName("");
       setCopyFromId("");
+      reload();
     } catch (err) {
       setError(err instanceof Error && err.message === "409" ? "Проект с таким названием уже есть." : "Не удалось создать проект.");
     } finally {
       setCreating(false);
     }
   }
+
+  async function submitClient(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newClientName.trim()) return;
+    setError("");
+    try {
+      await createClient(manager.id, newClientName.trim());
+      setNewClientName("");
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось создать заказчика.");
+    }
+  }
+
+  const byId = new Map((projects || []).map(p => [p.id, p]));
+  const inClients = new Set((clients || []).flatMap(c => c.projects.map(p => p.id)));
+  const loose = (projects || []).filter(p => !inClients.has(p.id));
 
   return (
     <div className="page">
@@ -65,6 +93,12 @@ export default function ProjectList({
             onChange={e => setNewName(e.target.value)}
             placeholder="Название нового проекта"
           />
+          {clients && clients.length > 0 && (
+            <select value={newClientId} onChange={e => setNewClientId(e.target.value)}>
+              <option value="">Без заказчика</option>
+              {clients.map(c => <option key={c.id} value={c.id}>Заказчик «{c.name}»</option>)}
+            </select>
+          )}
           {projects && projects.length > 0 && (
             <select value={copyFromId} onChange={e => setCopyFromId(e.target.value)}>
               <option value="">Начать с нуля</option>
@@ -81,16 +115,49 @@ export default function ProjectList({
         <p className="muted small">Создавать новые проекты может только админская папка — здесь можно открывать и проверять уже существующие.</p>
       )}
 
-      {projects === null && <div className="muted">Загрузка…</div>}
-      {projects !== null && projects.length === 0 && <div className="muted">Проектов пока нет.</div>}
+      {(projects === null || clients === null) && <div className="muted">Загрузка…</div>}
 
-      <div className="folder-grid">
-        {projects?.map(p => (
-          <button key={p.id} className="folder-card" onClick={() => onOpenProject(p)}>
-            📁 {p.name}
-          </button>
-        ))}
-      </div>
+      {clients && clients.length > 0 && <h2>Заказчики</h2>}
+      {clients?.map(c => (
+        <div key={c.id} className="client-block">
+          <div className="client-head">
+            <h2>🏢 {c.name}</h2>
+            <button type="button" className="link-button" onClick={() => onOpenClientStyleguide(c)}>📘 Стайлгайд заказчика</button>
+          </div>
+          {c.projects.length === 0 && <div className="muted small">Проектов пока нет.</div>}
+          <div className="folder-grid">
+            {c.projects.map(p => {
+              const full = byId.get(p.id) || { id: p.id, name: p.name, created_by_name: "" };
+              return (
+                <button key={p.id} className="folder-card" onClick={() => onOpenProject(full)}>
+                  📁 {p.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {manager.is_admin && (
+        <form className="inline-form" onSubmit={submitClient}>
+          <input value={newClientName} onChange={e => setNewClientName(e.target.value)} placeholder="Название нового заказчика" />
+          <button type="submit" disabled={!newClientName.trim()}>Создать заказчика</button>
+        </form>
+      )}
+
+      {projects !== null && clients !== null && (
+        <>
+          {loose.length > 0 && <h2>{clients.length > 0 ? "Проекты без заказчика" : "Проекты"}</h2>}
+          {projects.length === 0 && <div className="muted">Проектов пока нет.</div>}
+          <div className="folder-grid">
+            {loose.map(p => (
+              <button key={p.id} className="folder-card" onClick={() => onOpenProject(p)}>
+                📁 {p.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

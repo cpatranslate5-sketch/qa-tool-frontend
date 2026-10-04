@@ -11,6 +11,56 @@ export interface Project {
   // Admin-written project description (subject area, audience, special
   // requirements) — sent to the AI with every check in this project.
   description?: string;
+  // «Заказчик» this project belongs to (2026-10-04) — its styleguide applies.
+  client_id?: number | null;
+}
+
+export interface ClientEntry {
+  id: number;
+  name: string;
+  projects: { id: number; name: string }[];
+}
+
+// One styleguide section's value: {text} for AI sections, {level, form,
+// avoid, note} for tone, {items} for terms, the switches for "auto".
+export type SgValue = Record<string, any>;
+export type SgRules = Record<string, Record<string, SgValue>>; // lang -> section -> value
+
+export interface SgChange {
+  id: number;
+  lang: string;
+  lang_label: string;
+  section: string;
+  section_title: string;
+  before: SgValue | null;
+  after: SgValue | null;
+  changed_by_name: string;
+  created_at: string | null;
+}
+
+export interface SgMeta {
+  langs: { key: string; label: string }[];
+  sections: { key: string; title: string; kind: "ai" | "algo" }[];
+  tone_levels: Record<string, string>;
+  quote_kinds: Record<string, string>;
+  range_signs: Record<string, string>;
+  range_spaces: Record<string, string>;
+  em_dash_modes: Record<string, string>;
+  auto_default: SgValue;
+}
+
+export interface ClientStyleguide {
+  client: ClientEntry;
+  rules: SgRules;
+  history: SgChange[];
+}
+
+export interface ProjectStyleguide {
+  project: { id: number; name: string };
+  client: ClientEntry | null;
+  client_rules: SgRules;
+  own: SgRules;
+  history: SgChange[];
 }
 
 // One taught spelling in the global language-alias dictionary — see
@@ -34,6 +84,8 @@ export interface Finding {
   // so the UI can colorize that word (blue for formal, orange for informal)
   // instead of just showing the plain message string.
   register_majority?: "formal" | "informal" | null;
+  // The project's styleguide requirement for the tone (2026-10-04).
+  register_requirement?: string;
   // Only present on a "register_summary" finding, and only when there are
   // MAX_EXCEPTIONS_WITH_TEXT (3) or fewer rows that break from the majority
   // tone — the actual translated text of each exception row, so the UI can

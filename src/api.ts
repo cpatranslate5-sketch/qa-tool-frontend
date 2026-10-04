@@ -1,4 +1,9 @@
 import type {
+  ClientEntry,
+  ClientStyleguide,
+  ProjectStyleguide,
+  SgMeta,
+  SgValue,
   Finding,
   LanguageAlias,
   SavedCase,
@@ -298,4 +303,54 @@ export function multiCheckReportUrl(projectId: number, multiCheckId: number, man
 // can only ever affect the requesting manager's own uploads.
 export function deleteMultiCheck(projectId: number, multiCheckId: number, managerId: number): Promise<void> {
   return request(`/projects/${projectId}/multi-check/${multiCheckId}?manager_id=${managerId}`, { method: "DELETE" });
+}
+
+// --- clients («Заказчики») & styleguides (2026-10-04) ---
+
+export function listClients(): Promise<ClientEntry[]> {
+  return request("/clients");
+}
+
+export function createClient(managerId: number, name: string): Promise<ClientEntry> {
+  return request("/clients", { method: "POST", body: JSON.stringify({ manager_id: managerId, name }) });
+}
+
+export function setProjectClient(projectId: number, managerId: number, clientId: number | null): Promise<{ ok: boolean }> {
+  return request(`/projects/${projectId}/client`, {
+    method: "PUT",
+    body: JSON.stringify({ manager_id: managerId, client_id: clientId }),
+  });
+}
+
+export function styleguideMeta(): Promise<SgMeta> {
+  return request("/styleguide/meta");
+}
+
+export function getClientStyleguide(clientId: number): Promise<ClientStyleguide> {
+  return request(`/clients/${clientId}/styleguide`);
+}
+
+export function getProjectStyleguide(projectId: number): Promise<ProjectStyleguide> {
+  return request(`/projects/${projectId}/styleguide`);
+}
+
+export function saveClientSection(clientId: number, managerId: number, lang: string, section: string, value: SgValue): Promise<ClientStyleguide> {
+  return request(`/clients/${clientId}/styleguide`, {
+    method: "PUT",
+    body: JSON.stringify({ manager_id: managerId, lang, section, value }),
+  });
+}
+
+export function saveProjectSection(projectId: number, managerId: number, lang: string, section: string, value: SgValue | null): Promise<ProjectStyleguide> {
+  return request(`/projects/${projectId}/styleguide`, {
+    method: "PUT",
+    body: JSON.stringify({ manager_id: managerId, lang, section, value }),
+  });
+}
+
+export function revertStyleguideChange<T>(changeId: number, managerId: number): Promise<T> {
+  return request(`/styleguide/changes/${changeId}/revert`, {
+    method: "POST",
+    body: JSON.stringify({ manager_id: managerId }),
+  });
 }

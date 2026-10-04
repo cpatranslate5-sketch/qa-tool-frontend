@@ -223,6 +223,10 @@ export const TYPE_LABEL: Record<string, string> = {
   // _resolve_repeated_findings appends already covers that, same as any
   // other repeated finding — no separate rendering needed here).
   term_consistency: "Консистентность терминов",
+  // Client styleguide (2026-10-04): "style_rule" — checked by the algorithm
+  // (quotes, dashes, terms…), "styleguide" — noticed by the AI.
+  style_rule: "Стайлгайд",
+  styleguide: "Стайлгайд",
 };
 
 // Colors for the register_summary majority word — Александр's ask

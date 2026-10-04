@@ -5,6 +5,7 @@ import CheckRunner from "./CheckRunner";
 import FolderPicker from "./FolderPicker";
 import LanguageAliases from "./LanguageAliases";
 import SavedCases from "./SavedCases";
+import StyleguideEditor, { type StyleguideScope } from "./StyleguideEditor";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
 import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
@@ -16,7 +17,8 @@ type View =
   | { name: "project"; project: Project }
   | { name: "check"; project: Project; openMultiCheckId?: number }
   | { name: "aliases" }
-  | { name: "saved" };
+  | { name: "saved" }
+  | { name: "styleguide"; scope: StyleguideScope; back: View };
 
 // Keeps the manager on the exact screen they were on across a page reload
 // instead of dropping them back to the folder picker every time — Александр's
@@ -186,6 +188,7 @@ export default function App() {
           onOpenChangePassword={() => setShowChangePassword(true)}
           onOpenAliases={openAliases}
           onOpenSaved={() => setView({ name: "saved" })}
+          onOpenClientStyleguide={c => setView({ name: "styleguide", scope: { kind: "client", id: c.id, name: c.name }, back: { name: "projects" } })}
         />
       ) : view.name === "project" ? (
         <ProjectView
@@ -194,11 +197,18 @@ export default function App() {
           onOpenCheck={(multiCheckId?: number) => openCheck(view.project, multiCheckId)}
           onProjectDeleted={backToProjects}
           onBack={backToProjects}
+          onOpenStyleguide={() => setView({
+            name: "styleguide",
+            scope: { kind: "project", id: view.project.id, name: view.project.name },
+            back: { name: "project", project: view.project },
+          })}
         />
       ) : view.name === "aliases" ? (
         <LanguageAliases manager={manager} onBack={backToProjects} />
       ) : view.name === "saved" ? (
         <SavedCases manager={manager} onBack={backToProjects} />
+      ) : view.name === "styleguide" ? (
+        <StyleguideEditor manager={manager} scope={view.scope} onBack={() => setView(view.back)} />
       ) : (
         <CheckRunner
           manager={manager}

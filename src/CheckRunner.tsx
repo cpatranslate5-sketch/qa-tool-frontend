@@ -40,6 +40,9 @@ function FindingRow({ f }: { f: Finding }) {
         {segments.map((seg, i) => (
           <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.text}</span>
         ))}
+        {f.register_requirement && (
+          <div className="muted small" style={{ marginTop: 4 }}>Требование проекта: {f.register_requirement}</div>
+        )}
       </div>
     );
   }
@@ -907,7 +910,7 @@ export default function CheckRunner({
       {findings !== null && (
         <div className="results">
           <h2>Результат</h2>
-          <p className="muted small">Проверка завершена, стоимость составила: {formatCostRu(singleCost)}</p>
+          <p className="muted small">Проверка завершена, стоимость составила: <strong>{formatCostRu(singleCost)}</strong></p>
           {singleCheckId != null && (
             <button
               type="button"
@@ -1009,7 +1012,7 @@ export default function CheckRunner({
           <h2>Результат — {multiResult.summary.total_findings} проблем в {multiResult.summary.languages_checked.length} языках</h2>
           <p className="muted small">
             Исходный язык: {multiResult.source_lang}. Строк проверено: {multiResult.summary.rows_checked}.
-            {" "}Проверка завершена, стоимость составила: {formatCostRu(multiResult.cost_usd || 0)}
+            {" "}Проверка завершена, стоимость составила: <strong>{formatCostRu(multiResult.cost_usd || 0)}</strong>
             {describeCostByModelRu(multiResult.summary?.cost_by_model) ? ` — ${describeCostByModelRu(multiResult.summary?.cost_by_model)}` : ""}.
             {durationText && <> Заняла: {durationText}.</>}
             {criteriaText && <> Критерии: {criteriaText}.</>}

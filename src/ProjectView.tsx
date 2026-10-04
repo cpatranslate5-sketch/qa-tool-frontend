@@ -5,11 +5,13 @@ import {
   deleteProject,
   getProject,
   knownLanguages,
+  listClients,
+  setProjectClient,
   updateProjectDescription,
 } from "./api";
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { flagForLang } from "./lang";
-import type { Manager, Project } from "./types";
+import type { ClientEntry, Manager, Project } from "./types";
 
 // The project's manually-curated "which languages do I check here" list.
 // Александр asked for this list to change ONLY when he explicitly adds or
@@ -219,6 +221,7 @@ export default function ProjectView({
   onOpenCheck,
   onProjectDeleted,
   onBack,
+  onOpenStyleguide,
 }: {
   manager: Manager;
   project: Project;
@@ -228,7 +231,10 @@ export default function ProjectView({
   onOpenCheck: (multiCheckId?: number) => void;
   onProjectDeleted: () => void;
   onBack: () => void;
+  onOpenStyleguide: () => void;
 }) {
+  const [clients, setClients] = useState<ClientEntry[] | null>(null);
+  const [clientId, setClientId] = useState<number | null>(project.client_id ?? null);
   const [catalogLangs, setCatalogLangs] = useState<string[] | null>(null);
   // Fetched fresh on open — the project object passed in may predate an edit.
   const [description, setDescription] = useState(project.description || "");
@@ -244,8 +250,22 @@ export default function ProjectView({
   }, [project.id]);
 
   useEffect(() => {
-    getProject(project.id).then(p => setDescription(p.description || "")).catch(() => {});
+    getProject(project.id).then(p => { setDescription(p.description || ""); setClientId(p.client_id ?? null); }).catch(() => {});
+    listClients().then(setClients).catch(() => setClients([]));
   }, [project.id]);
+
+  async function changeClient(value: string) {
+    const next = value ? Number(value) : null;
+    setError("");
+    try {
+      await setProjectClient(project.id, manager.id, next);
+      setClientId(next);
+    } catch {
+      setError("Не удалось перенести проект.");
+    }
+  }
+
+  const clientName = clients?.find(c => c.id === clientId)?.name;
 
   async function addLanguage(code: string) {
     const r = await addCatalogLanguage(project.id, manager.id, code);
@@ -277,6 +297,17 @@ export default function ProjectView({
       <div className="top-bar">
         <h1>{project.name}</h1>
         <button className="link-button" onClick={onBack}>← К проектам</button>
+      </div>
+
+      <div className="project-client-line">
+        <span className="muted">{clientName ? <>Заказчик: <strong>{clientName}</strong></> : "Без заказчика"}</span>
+        <button type="button" className="link-button" onClick={onOpenStyleguide}>📘 Стайлгайд проекта</button>
+        {manager.is_admin && clients && clients.length > 0 && (
+          <select value={clientId ?? ""} onChange={e => changeClient(e.target.value)} style={{ width: "auto", margin: 0 }}>
+            <option value="">Без заказчика</option>
+            {clients.map(c => <option key={c.id} value={c.id}>Заказчик «{c.name}»</option>)}
+          </select>
+        )}
       </div>
 
       {error && <div className="error-box">{error}</div>}

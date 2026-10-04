@@ -41,7 +41,9 @@ function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
     const segments = registerSummarySegments(f);
     const inner = segments
       .map(seg => (seg.color ? `<span style="color:${esc(seg.color)};font-weight:600">${esc(seg.text)}</span>` : esc(seg.text)))
-      .join("");
+      .join("") + (f.register_requirement
+        ? `<div class="rv-req">Требование проекта: ${esc(f.register_requirement)}</div>`
+        : "");
     if (!rv) return `<div class="finding finding-info">${inner}</div>`;
     return `<div class="finding finding-info rv-item" data-key="${esc(rv.key)}">
       ${reviewCornerHtml()}
@@ -152,6 +154,7 @@ const REPORT_CSS = `
   .rv-tr { margin: 8px -110px 0 0; font-size: 0.82rem; padding: 5px 8px; background: #fff; border: 1px dashed #c5cad3; border-radius: 6px; }
   .rv-tr-yes { color: #17703c; font-weight: 600; }
   .rv-tr-no { color: #b42318; font-weight: 600; }
+  .rv-req { margin-top: 4px; font-size: 0.85rem; color: #3949ab; }
   .rv-link-warn { margin-top: 8px; color: #b42318; background: #fff4f2; border: 1px solid #f0b4b4; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; font-weight: 600; }
   .rv-item.missing-link { box-shadow: inset 0 0 0 2px #dc2626; }
   .rv-item.missing-link .rv-links { border-color: #dc2626; background: #fff4f2; }
@@ -544,7 +547,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
 <body>
   <div class="page">
     <h1>${esc(titleText)}</h1>
-    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: ${esc(formatCostRu(result.cost_usd))}${(() => { const b = describeCostByModelRu(summary.cost_by_model); return b ? ` — ${esc(b)}` : ""; })()}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}${(() => { const c = describeChecksRu(result.checks_run); return c ? ` Критерии: ${esc(c)}.` : ""; })()}${(() => { const m = describeModelsRu(summary.models_by_lang); return m ? ` Модели: ${esc(m)}.` : ""; })()}</p>` : ""}
+    ${summary ? `<p class="muted">Исходный язык: ${esc(result.source_lang)}. Строк проверено: ${summary.rows_checked}. Найдено проблем: ${summary.total_findings} в ${summary.languages_checked.length} языках.${result.cost_usd != null ? ` Стоимость: <strong style="color:#1c2230">${esc(formatCostRu(result.cost_usd))}</strong>${(() => { const b = describeCostByModelRu(summary.cost_by_model); return b ? ` — ${esc(b)}` : ""; })()}.` : ""}${(() => { const d = formatDurationRu(result.created_at, result.completed_at); return d ? ` Заняла: ${esc(d)}.` : ""; })()}${(() => { const c = describeChecksRu(result.checks_run); return c ? ` Критерии: ${esc(c)}.` : ""; })()}${(() => { const m = describeModelsRu(summary.models_by_lang); return m ? ` Модели: ${esc(m)}.` : ""; })()}</p>` : ""}
     ${projectId != null && managerId != null
       ? `<div><a class="download-link" href="${esc(multiCheckReportUrl(projectId, result.multi_check_id, managerId))}" target="_blank" rel="noopener noreferrer">⬇ Скачать отчёт (Excel)</a></div>`
       : ""}
