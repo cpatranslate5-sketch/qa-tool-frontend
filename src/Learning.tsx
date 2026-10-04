@@ -9,6 +9,7 @@ import {
   type Lesson,
 } from "./api";
 import TagText from "./TagText";
+import { langLabel } from "./lang";
 import type { Manager } from "./types";
 
 // «Обучение платформы» (2026-10-04, Александр): the only place where the
@@ -245,6 +246,9 @@ export default function Learning({
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
   const [lessonFilter, setLessonFilter] = useState<"active" | "disabled" | "deleted">("active");
   const [error, setError] = useState("");
+  // Language filter (2026-10-04, Александр): "" = all languages. Kept across
+  // tabs; a lesson for «все языки» is shown under every language too.
+  const [langFilter, setLangFilter] = useState("");
 
   function load(t: Tab = tab) {
     setError("");
@@ -275,7 +279,17 @@ export default function Learning({
     ["dismissed", "Не запоминать"],
     ["lessons", "Уроки"],
   ];
-  const shownLessons = (lessons || []).filter(l => l.status === lessonFilter);
+  const itemKey = (it: LearningItem) => (it.lang_key || it.lang_code || "").toLowerCase();
+  const langsHere = Array.from(new Set(
+    tab === "lessons"
+      ? (lessons || []).map(l => (l.lang_key || "").toLowerCase()).filter(Boolean)
+      : (items || []).map(itemKey).filter(Boolean),
+  ));
+  if (langFilter && !langsHere.includes(langFilter)) langsHere.push(langFilter);
+  langsHere.sort();
+  const shownItems = (items || []).filter(it => !langFilter || itemKey(it) === langFilter);
+  const lessonsInLang = (lessons || []).filter(l => !langFilter || !l.lang_key || l.lang_key.toLowerCase() === langFilter);
+  const shownLessons = lessonsInLang.filter(l => l.status === lessonFilter);
 
   return (
     <div className="page sg-page">
@@ -297,12 +311,20 @@ export default function Learning({
         ))}
       </div>
       {error && <div className="error-box">{error}</div>}
+      <div className="inline-form lr-langfilter">
+        <label className="muted small">Язык:</label>
+        <select value={langFilter} onChange={e => setLangFilter(e.target.value)}>
+          <option value="">Все языки</option>
+          {langsHere.map(k => <option key={k} value={k}>{langLabel(k)}</option>)}
+        </select>
+        {langFilter && <button type="button" className="link-button" onClick={() => setLangFilter("")}>сбросить</button>}
+      </div>
 
       {tab !== "lessons" && (
         <div className="lr-list">
           {items === null && <div className="muted">Загрузка…</div>}
-          {items !== null && items.length === 0 && <div className="muted">Здесь пусто.</div>}
-          {(items || []).map(it => (
+          {items !== null && shownItems.length === 0 && <div className="muted">{langFilter ? "По этому языку здесь пусто." : "Здесь пусто."}</div>}
+          {shownItems.map(it => (
             <ItemCard key={it.id} item={it} manager={manager} onChanged={() => load()} onOpenReport={onOpenReport} />
           ))}
         </div>
@@ -313,7 +335,7 @@ export default function Learning({
           <div className="sg-tabs">
             {(["active", "disabled", "deleted"] as const).map(f => (
               <button key={f} type="button" className={`sg-tab${lessonFilter === f ? " on" : ""}`} onClick={() => setLessonFilter(f)}>
-                {f === "active" ? "Действуют" : f === "disabled" ? "Выключены" : "Удалены"} ({(lessons || []).filter(l => l.status === f).length})
+                {f === "active" ? "Действуют" : f === "disabled" ? "Выключены" : "Удалены"} ({lessonsInLang.filter(l => l.status === f).length})
               </button>
             ))}
           </div>
