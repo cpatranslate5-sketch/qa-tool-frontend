@@ -493,7 +493,11 @@ export default function CheckRunner({
     setTargetLangsMulti(prev => (prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]));
   }
   function toggleAllTargets() {
-    setTargetLangsMulti(prev => (prev.length === targetCandidates.length ? [] : [...targetCandidates]));
+    setTargetLangsMulti(prev => {
+      const extra = prev.filter(c => !targetCandidates.includes(c));
+      const allOn = targetCandidates.every(c => prev.includes(c));
+      return allOn ? extra : [...targetCandidates, ...extra];
+    });
   }
 
   // Resolves one pasted line to a real catalog code — strictly, no guessing
@@ -771,6 +775,14 @@ export default function CheckRunner({
                   языков. Если это опечатка — переименуйте колонку в файле. Если это новый язык — добавьте его
                   вручную в разделе «Языки проекта» на странице проекта.
                 </span>
+                {code !== sourceLang && (
+                  // 2026-10-04: such a language can still be checked once,
+                  // by the client's general styleguide rules (if any).
+                  <label className="checkbox-row" style={{ marginTop: 4 }}>
+                    <input type="checkbox" checked={targetLangsMulti.includes(code)} onChange={() => toggleTargetMulti(code)} />
+                    Всё равно проверить этот язык (по общим правилам заказчика)
+                  </label>
+                )}
               </div>
             ))}
           </div>
@@ -819,7 +831,7 @@ export default function CheckRunner({
               )}
             </div>
             <label className="check-chip select-all">
-              <input type="checkbox" checked={targetLangsMulti.length === targetCandidates.length} onChange={toggleAllTargets} />
+              <input type="checkbox" checked={targetCandidates.length > 0 && targetCandidates.every(c => targetLangsMulti.includes(c))} onChange={toggleAllTargets} />
               Выбрать все
             </label>
             <div className="target-lang-grid">
