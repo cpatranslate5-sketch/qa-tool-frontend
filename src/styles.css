@@ -632,3 +632,10 @@ button:disabled { opacity: 0.5; cursor: default; }
 .sg-hist-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
 .sg-page button.secondary { background: var(--panel-2); color: var(--fg); border: 1px solid var(--border); }
 .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; } .checkbox-row input { width: auto; margin: 0; }
+.desc-text { white-space: pre-wrap; margin-bottom: 4px; }
+.desc-collapsed {
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
+  mask-image: linear-gradient(to bottom, #000 60%, transparent);
+}
+.desc-toggle { display: block; margin: 0 0 6px; }

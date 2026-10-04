@@ -137,6 +137,9 @@ function ProjectDescriptionSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [justSaved, setJustSaved] = useState(false);
+  // Long descriptions start folded to a few lines (2026-10-04, Александр).
+  const [expanded, setExpanded] = useState(false);
+  const isLong = saved.length > 350 || saved.split("\n").length > 5;
 
   useEffect(() => {
     setSaved(initial);
@@ -170,7 +173,14 @@ function ProjectDescriptionSection({
       {!editing && (
         <>
           {saved ? (
-            <p style={{ whiteSpace: "pre-wrap" }}>{saved}</p>
+            <>
+              <p className={`desc-text${isLong && !expanded ? " desc-collapsed" : ""}`}>{saved}</p>
+              {isLong && (
+                <button type="button" className="link-button desc-toggle" onClick={() => setExpanded(v => !v)}>
+                  {expanded ? "▴ Скрыть часть описания" : "▾ Показать полностью"}
+                </button>
+              )}
+            </>
           ) : (
             <p className="muted small">Описание не задано.</p>
           )}
@@ -187,7 +197,7 @@ function ProjectDescriptionSection({
           <textarea
             value={draft}
             onChange={e => setDraft(e.target.value)}
-            rows={6}
+            rows={Math.min(24, Math.max(6, draft.split("\n").length + 2))}
             maxLength={4000}
             style={{ width: "100%" }}
             placeholder="Например: беттинг и гемблинг, аудитория — Индия, тон дружелюбный…"
