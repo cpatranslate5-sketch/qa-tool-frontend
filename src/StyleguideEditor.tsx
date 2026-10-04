@@ -238,11 +238,14 @@ export default function StyleguideEditor({
   const own: SgRules = (isProject ? projectData?.own : {}) || {};
   const history: SgChange[] = (isProject ? projectData?.history : clientData?.history) || [];
 
+  // A project's languages come from its «Языки проекта» list (2026-10-04).
+  const projectLangs = isProject ? projectData?.langs ?? null : null;
   const langs = useMemo(() => {
     if (!meta) return [];
+    if (projectLangs) return meta.langs.filter(l => projectLangs.includes(l.key));
     const present = new Set([...Object.keys(base), ...Object.keys(own)]);
     return meta.langs.filter(l => present.has(l.key));
-  }, [meta, base, own]);
+  }, [meta, base, own, projectLangs]);
 
   useEffect(() => {
     if (langs.length && !langs.some(l => l.key === lang)) setLang(langs[0].key);
@@ -386,14 +389,19 @@ export default function StyleguideEditor({
             {l.label}{isProject && own[l.key] && Object.keys(own[l.key]).length > 0 ? " •" : ""}
           </button>
         ))}
-        {isAdmin && addable.length > 0 && (
+        {isAdmin && !projectLangs && addable.length > 0 && (
           <select className="sg-addlang" value={addLang} onChange={e => { const v = e.target.value; setAddLang(""); if (v) setLang(v); }}>
             <option value="">＋ язык</option>
             {addable.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
           </select>
         )}
       </div>
-      {isProject && <p className="muted small">• — у языка есть свои правила проекта.</p>}
+      {isProject && (
+        <p className="muted small">
+          • — у языка есть свои правила проекта.
+          {projectLangs && " Список языков берётся из «Языки проекта» на странице проекта."}
+        </p>
+      )}
 
       {error && <div className="error-box">{error}</div>}
 

@@ -60,6 +60,8 @@ export interface ProjectStyleguide {
   client: ClientEntry | null;
   client_rules: SgRules;
   own: SgRules;
+  // Styleguide language keys of the project's «Языки проекта» list; null = no list.
+  langs: string[] | null;
   history: SgChange[];
 }
 
