@@ -6,6 +6,7 @@ import FolderPicker from "./FolderPicker";
 import LanguageAliases from "./LanguageAliases";
 import SavedCases from "./SavedCases";
 import Learning from "./Learning";
+import FolderChecks from "./FolderChecks";
 import StyleguideEditor, { type StyleguideScope } from "./StyleguideEditor";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
@@ -20,6 +21,7 @@ type View =
   | { name: "aliases" }
   | { name: "saved" }
   | { name: "learning" }
+  | { name: "folderChecks" }
   | { name: "styleguide"; scope: StyleguideScope; back: View };
 
 // Keeps the manager on the exact screen they were on across a page reload
@@ -191,6 +193,7 @@ export default function App() {
           onOpenAliases={openAliases}
           onOpenSaved={() => setView({ name: "saved" })}
           onOpenLearning={() => setView({ name: "learning" })}
+          onOpenFolderChecks={() => setView({ name: "folderChecks" })}
           onOpenClientStyleguide={c => setView({ name: "styleguide", scope: { kind: "client", id: c.id, name: c.name }, back: { name: "projects" } })}
         />
       ) : view.name === "project" ? (
@@ -220,6 +223,8 @@ export default function App() {
             if (p) openCheck(p, multiCheckId);
           }}
         />
+      ) : view.name === "folderChecks" ? (
+        <FolderChecks manager={manager} onBack={backToProjects} />
       ) : view.name === "styleguide" ? (
         <StyleguideEditor manager={manager} scope={view.scope} onBack={() => setView(view.back)} />
       ) : (

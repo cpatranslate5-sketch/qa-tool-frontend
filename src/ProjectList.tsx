@@ -13,6 +13,7 @@ export default function ProjectList({
   onOpenAliases,
   onOpenSaved,
   onOpenLearning,
+  onOpenFolderChecks,
 }: {
   manager: Manager;
   onOpenProject: (project: Project) => void;
@@ -22,6 +23,7 @@ export default function ProjectList({
   onOpenAliases: () => void;
   onOpenSaved: () => void;
   onOpenLearning: () => void;
+  onOpenFolderChecks: () => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [clients, setClients] = useState<ClientEntry[] | null>(null);
@@ -91,6 +93,7 @@ export default function ProjectList({
               Обучение платформы{learningNew > 0 && <span className="red-badge">{learningNew}</span>}
             </button>
           )}
+          {manager.is_admin && <button className="link-button" onClick={onOpenFolderChecks}>Поиск проверок</button>}
           <button className="link-button" onClick={onOpenAliases}>Словарь языков</button>
           <button className="link-button" onClick={onOpenChangePassword}>Сменить пароль</button>
           <button className="link-button" onClick={onSwitchFolder}>Сменить папку</button>

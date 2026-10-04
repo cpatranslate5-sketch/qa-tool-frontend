@@ -433,3 +433,39 @@ export function listLessons(managerId: number): Promise<{ lessons: Lesson[] }> {
 export function updateLesson(lessonId: number, managerId: number, patch: { text?: string; scope?: string; lang_scope?: string; status?: string }): Promise<Lesson> {
   return request(`/learning/lessons/${lessonId}`, { method: "PUT", body: JSON.stringify({ manager_id: managerId, ...patch }) });
 }
+
+// --- Admin: «Поиск проверок папки» (2026-10-04) ---
+export type FolderCheck = {
+  kind: "file" | "point";
+  id: number;
+  project_id: number;
+  project_name: string;
+  client_name: string;
+  title: string;
+  langs: string[];
+  findings: number | null;
+  status: string;
+  created_at: string;
+  owner_id: number | null;
+  owner_name: string;
+  performed_by_name: string;
+};
+export type DeletedTrace = {
+  multi_check_id: number;
+  project_name: string;
+  filename: string;
+  langs: string[];
+  seen_in: string[];
+  this_folder: boolean;
+};
+export function adminFolderChecks(managerId: number, folderId: number): Promise<{
+  folder: { id: number; name: string }; checks: FolderCheck[]; deleted_traces: DeletedTrace[];
+}> {
+  return request(`/admin/folder-checks?manager_id=${managerId}&folder_id=${folderId}`);
+}
+export function adminMoveCheck(managerId: number, kind: string, checkId: number, folderId: number): Promise<{ ok: boolean }> {
+  return request("/admin/checks/move", {
+    method: "POST",
+    body: JSON.stringify({ manager_id: managerId, kind, check_id: checkId, folder_id: folderId }),
+  });
+}
