@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createClient, createProject, listClients, listProjects, setProjectClient } from "./api";
+import { createClient, createProject, learningSummary, listClients, listProjects, setProjectClient } from "./api";
 import type { ClientEntry, Manager, Project } from "./types";
 
 // Main screen: «Заказчики» (2026-10-04) — each client with its styleguide
@@ -12,6 +12,7 @@ export default function ProjectList({
   onOpenChangePassword,
   onOpenAliases,
   onOpenSaved,
+  onOpenLearning,
 }: {
   manager: Manager;
   onOpenProject: (project: Project) => void;
@@ -20,6 +21,7 @@ export default function ProjectList({
   onOpenChangePassword: () => void;
   onOpenAliases: () => void;
   onOpenSaved: () => void;
+  onOpenLearning: () => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [clients, setClients] = useState<ClientEntry[] | null>(null);
@@ -36,6 +38,12 @@ export default function ProjectList({
   }
 
   useEffect(reload, []);
+
+  // Red counter of new «Обучение платформы» items (admin only).
+  const [learningNew, setLearningNew] = useState(0);
+  useEffect(() => {
+    if (manager.is_admin) learningSummary(manager.id).then(r => setLearningNew(r.new)).catch(() => {});
+  }, [manager.id, manager.is_admin]);
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +86,11 @@ export default function ProjectList({
         <h1>Проекты — {manager.name}{manager.is_admin ? " (админ)" : ""}</h1>
         <div className="top-bar-actions">
           <button className="link-button" onClick={onOpenSaved}>Сохранённое</button>
+          {manager.is_admin && (
+            <button className="link-button" onClick={onOpenLearning}>
+              Обучение платформы{learningNew > 0 && <span className="red-badge">{learningNew}</span>}
+            </button>
+          )}
           <button className="link-button" onClick={onOpenAliases}>Словарь языков</button>
           <button className="link-button" onClick={onOpenChangePassword}>Сменить пароль</button>
           <button className="link-button" onClick={onSwitchFolder}>Сменить папку</button>

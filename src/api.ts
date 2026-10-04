@@ -354,3 +354,82 @@ export function revertStyleguideChange<T>(changeId: number, managerId: number): 
     body: JSON.stringify({ manager_id: managerId }),
   });
 }
+
+// --- «Обучение платформы» (2026-10-04) ---
+export interface LearningItem {
+  id: number;
+  origin: "okk" | "translator";
+  status: "new" | "postponed" | "dismissed" | "learned";
+  multi_check_id: number;
+  project_id: number | null;
+  project_name: string;
+  client_id: number | null;
+  client_name: string;
+  filename: string;
+  lang_code: string;
+  lang_key: string;
+  lang_label: string;
+  excel_row: number;
+  context: string;
+  finding_type: string;
+  finding_message: string;
+  source: string;
+  translation: string;
+  translator_comment: string;
+  okk_note: string;
+  lesson_id: number | null;
+  resolved_by_name: string;
+  created_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface LessonHistoryEntry {
+  action: string;
+  snapshot: { text: string; project_id: number | null; client_id: number | null; lang_key: string; status: string } | null;
+  by_name: string;
+  created_at: string | null;
+}
+
+export interface Lesson {
+  id: number;
+  text: string;
+  project_id: number | null;
+  client_id: number | null;
+  lang_key: string;
+  lang_label: string;
+  scope_label: string;
+  example: { finding_message?: string; source?: string; translation?: string; project_name?: string; lang_code?: string; item_id?: number };
+  status: "active" | "disabled" | "deleted";
+  used_count: number;
+  created_by_name: string;
+  created_at: string | null;
+  updated_at: string | null;
+  history: LessonHistoryEntry[];
+}
+
+export function learningSummary(managerId: number): Promise<{ new: number }> {
+  return request(`/learning/summary?manager_id=${managerId}`);
+}
+
+export function learningItems(managerId: number, status: string): Promise<{ items: LearningItem[]; counts: Record<string, number> }> {
+  return request(`/learning/items?manager_id=${managerId}&status=${status}`);
+}
+
+export function learnItem(itemId: number, managerId: number, text: string, scope: string, langScope: string): Promise<{ item: LearningItem; lesson: Lesson }> {
+  return request(`/learning/items/${itemId}/learn`, {
+    method: "POST",
+    body: JSON.stringify({ manager_id: managerId, text, scope, lang_scope: langScope }),
+  });
+}
+
+export function setItemStatus(itemId: number, managerId: number, status: string): Promise<{ item: LearningItem }> {
+  return request(`/learning/items/${itemId}/status`, { method: "POST", body: JSON.stringify({ manager_id: managerId, status }) });
+}
+
+export function listLessons(managerId: number): Promise<{ lessons: Lesson[] }> {
+  return request(`/learning/lessons?manager_id=${managerId}`);
+}
+
+export function updateLesson(lessonId: number, managerId: number, patch: { text?: string; scope?: string; lang_scope?: string; status?: string }): Promise<Lesson> {
+  return request(`/learning/lessons/${lessonId}`, { method: "PUT", body: JSON.stringify({ manager_id: managerId, ...patch }) });
+}

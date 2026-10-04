@@ -639,3 +639,18 @@ button:disabled { opacity: 0.5; cursor: default; }
   mask-image: linear-gradient(to bottom, #000 60%, transparent);
 }
 .desc-toggle { display: block; margin: 0 0 6px; }
+.fb-off { opacity: 0.55; }
+/* «Обучение платформы» */
+.red-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: #dc2626; color: #fff; font-size: 0.72rem; font-weight: 700; line-height: 1; }
+.lr-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.lr-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 6px; }
+.lr-origin { font-size: 0.75rem; font-weight: 700; border-radius: 10px; padding: 2px 8px; }
+.lr-origin.okk { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.lr-origin.translator { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.lr-line { margin-top: 6px; }
+.lr-form { margin-top: 10px; }
+.lr-form textarea { width: 100%; }
+.lr-scope { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 8px; }
+.lr-scope .sg-check { display: flex; margin: 4px 0; }
+.lr-text { white-space: pre-wrap; margin: 6px 0; }
+.lr-history { margin-top: 8px; }

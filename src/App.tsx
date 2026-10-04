@@ -5,6 +5,7 @@ import CheckRunner from "./CheckRunner";
 import FolderPicker from "./FolderPicker";
 import LanguageAliases from "./LanguageAliases";
 import SavedCases from "./SavedCases";
+import Learning from "./Learning";
 import StyleguideEditor, { type StyleguideScope } from "./StyleguideEditor";
 import ProjectList from "./ProjectList";
 import ProjectView from "./ProjectView";
@@ -18,6 +19,7 @@ type View =
   | { name: "check"; project: Project; openMultiCheckId?: number }
   | { name: "aliases" }
   | { name: "saved" }
+  | { name: "learning" }
   | { name: "styleguide"; scope: StyleguideScope; back: View };
 
 // Keeps the manager on the exact screen they were on across a page reload
@@ -188,6 +190,7 @@ export default function App() {
           onOpenChangePassword={() => setShowChangePassword(true)}
           onOpenAliases={openAliases}
           onOpenSaved={() => setView({ name: "saved" })}
+          onOpenLearning={() => setView({ name: "learning" })}
           onOpenClientStyleguide={c => setView({ name: "styleguide", scope: { kind: "client", id: c.id, name: c.name }, back: { name: "projects" } })}
         />
       ) : view.name === "project" ? (
@@ -207,6 +210,16 @@ export default function App() {
         <LanguageAliases manager={manager} onBack={backToProjects} />
       ) : view.name === "saved" ? (
         <SavedCases manager={manager} onBack={backToProjects} />
+      ) : view.name === "learning" ? (
+        <Learning
+          manager={manager}
+          onBack={backToProjects}
+          onOpenReport={async (projectId, multiCheckId) => {
+            const projects = await listProjects();
+            const p = projects.find(x => x.id === projectId);
+            if (p) openCheck(p, multiCheckId);
+          }}
+        />
       ) : view.name === "styleguide" ? (
         <StyleguideEditor manager={manager} scope={view.scope} onBack={() => setView(view.back)} />
       ) : (
