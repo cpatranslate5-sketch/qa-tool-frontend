@@ -364,6 +364,19 @@ export function revertStyleguideChange<T>(changeId: number, managerId: number): 
 }
 
 // --- «Обучение платформы» (2026-10-04) ---
+// «Разбор комментариев» (2026-10-05): the language's own model's second opinion.
+export interface AiReview {
+  verdict: "translator_right" | "partly" | "translator_wrong" | "unclear";
+  confidence: number;
+  reasoning: string;
+  lesson: string;
+  suggested_scope: "project" | "client" | "all";
+  translator_reply: string;
+  model: string;
+  cost_usd: number;
+  at: string;
+}
+
 export interface LearningItem {
   id: number;
   origin: "okk" | "translator";
@@ -385,6 +398,7 @@ export interface LearningItem {
   translation: string;
   translator_comment: string;
   okk_note: string;
+  ai_review: AiReview | null;
   lesson_id: number | null;
   resolved_by_name: string;
   created_at: string | null;
@@ -428,6 +442,10 @@ export function learnItem(itemId: number, managerId: number, text: string, scope
     method: "POST",
     body: JSON.stringify({ manager_id: managerId, text, scope, lang_scope: langScope }),
   });
+}
+
+export function reviewItem(itemId: number, managerId: number, force = false): Promise<{ item: LearningItem }> {
+  return request(`/learning/items/${itemId}/review`, { method: "POST", body: JSON.stringify({ manager_id: managerId, force }) });
 }
 
 export function setItemStatus(itemId: number, managerId: number, status: string): Promise<{ item: LearningItem }> {
