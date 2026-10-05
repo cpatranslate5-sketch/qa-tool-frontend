@@ -9,6 +9,7 @@ import { describeCostByModelRu, alsoRowsSegments, TAG_COLOR, tagSegments, descri
 import { toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
 import { API_URL, multiCheckDetail, multiCheckReportUrl, singleCheckReport } from "./api";
 import type { Finding, MultiCheckResponse, ReviewEntry, TranslatorEntry } from "./types";
+import { isLongText, locateFinding, locationLabel, type FindingLocation } from "./locate";
 
 function esc(s: string): string {
   return String(s ?? "")
@@ -26,6 +27,23 @@ function tagHtml(s: string): string {
     .join("");
 }
 
+// Text with the found error spots highlighted (2026-10-05, «где именно»).
+function markedHtml(text: string, ranges: { start: number; end: number }[]): string {
+  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  let out = "", pos = 0;
+  for (const r of sorted) {
+    if (r.start < pos) continue; // overlapping — keep the first
+    out += tagHtml(text.slice(pos, r.start)) + `<mark class="loc">${tagHtml(text.slice(r.start, r.end))}</mark>`;
+    pos = r.end;
+  }
+  return out + tagHtml(text.slice(pos));
+}
+
+function locHtml(loc: FindingLocation | null, show: boolean): string {
+  if (!loc || !show) return "";
+  return `<div class="finding-loc">📍 ${esc(locationLabel(loc))}: ${esc(loc.before)}<mark class="loc">${esc(loc.fragment)}</mark>${esc(loc.after)}</div>`;
+}
+
 // One finding, as HTML — mirrors CheckRunner.tsx's FindingRow: a
 // "register_summary" entry (the tone-of-address actually used, see
 // app.claude_client.build_register_report) is pure information, not a
@@ -36,7 +54,7 @@ function tagHtml(s: string): string {
 // wording is shown highlighted red instead of just its row number — both
 // per Александр's ask (2026-09-17); see lang.ts's registerSummarySegments.
 type ReviewInfo = { key: string; num: number; tr?: TranslatorEntry; entry?: ReviewEntry };
-function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
+function findingHtml(f: Finding, rv: ReviewInfo | null = null, loc = ""): string {
   if (f.type === "register_summary") {
     const segments = registerSummarySegments(f);
     const inner = segments
@@ -63,6 +81,7 @@ function findingHtml(f: Finding, rv: ReviewInfo | null = null): string {
       <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
       ${findingConfidence(f) != null ? `<span class="finding-type" title="Уверенность модели в этой находке">${findingConfidence(f)}%</span>` : ""}
       <div class="finding-message">${messageInner}</div>
+      ${loc}
       ${rv ? reviewFieldsHtml() + translatorAnswerHtml(rv.tr, rv.entry) : ""}
     </div>
   `;
@@ -155,6 +174,9 @@ const REPORT_CSS = `
   .rv-tr-yes { color: #17703c; font-weight: 600; }
   .rv-tr-no { color: #b42318; font-weight: 600; }
   .rv-req { margin-top: 4px; font-size: 0.85rem; color: #3949ab; }
+  .finding-loc { margin-top: 6px; font-size: 0.85rem; color: #555; white-space: pre-wrap; }
+  mark.loc { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
+  .pair div { white-space: pre-wrap; }
   .rv-link-warn { margin-top: 8px; color: #b42318; background: #fff4f2; border: 1px solid #f0b4b4; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; font-weight: 600; }
   .rv-item.missing-link { box-shadow: inset 0 0 0 2px #dc2626; }
   .rv-item.missing-link .rv-links { border-color: #dc2626; background: #fff4f2; }
@@ -218,6 +240,8 @@ const REVIEW_SCRIPT = `
   }
   function needsLink(key) {
     var e = RV_STATE[key] || {};
+    // Links are required only where the client works in Crowdin (2026-10-05).
+    if (RV_CFG.usesCrowdin === false) return false;
     return key.indexOf("tone|") !== 0 && (e.decision === "accept" || e.decision === "question");
   }
   function paint(key, skipEl) {
@@ -442,6 +466,10 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
           reviewItems[key] = { lang, num: 1 };
           return `<div class="multi-row rv-general"><div class="multi-row-header">Тон обращения</div>${findingHtml(tone, { key, num: 1, tr: translatorReview[key], entry: (result.review || {})[key] })}</div>`;
         }
+        const locs = row.findings.map(f => locateFinding(f, row.source || "", row.translation || ""));
+        const rangesFor = (field: "source" | "translation") =>
+          locs.filter((l): l is FindingLocation => !!l && l.field === field).map(l => ({ start: l.start, end: l.end }));
+        const longText = isLongText(row.translation || "") || isLongText(row.source || "");
         return `
             <div class="multi-row">
               ${reviewEnabled && row.excel_row !== 0 ? (() => {
@@ -451,8 +479,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
               })() : ""}
               <div class="multi-row-header">${row.excel_row === 0 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
               ${row.excel_row === 0 ? "" : `<div class="pair">
-                <div><strong>Источник:</strong> ${tagHtml(row.source)}</div>
-                <div><strong>Перевод:</strong> ${tagHtml(row.translation)}</div>
+                <div><strong>Источник:</strong> ${markedHtml(row.source || "", rangesFor("source"))}</div>
+                <div><strong>Перевод:</strong> ${markedHtml(row.translation || "", rangesFor("translation"))}</div>
               </div>`}
               ${row.findings.map((f, fi) => {
                 let rv: ReviewInfo | null = null;
@@ -465,7 +493,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                     reviewItems[key] = { lang, num };
                   }
                 }
-                return findingHtml(f, rv);
+                return findingHtml(f, rv, locHtml(locs[fi], longText));
               }).join("")}
             </div>
           `;
@@ -608,6 +636,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       multiCheckId: result.multi_check_id,
       singleLang: allLangs.length === 1 ? allLangs[0] : null,
       shares: result.shares || {},
+      usesCrowdin: result.uses_crowdin !== false,
     })};
     var RV_ITEMS = ${jsonForScript(reviewItems)};
     var RV_STATE = ${jsonForScript(result.review || {})};

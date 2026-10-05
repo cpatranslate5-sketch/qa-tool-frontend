@@ -319,6 +319,10 @@ export function setClientDomain(clientId: number, managerId: number, domain: str
   return request(`/clients/${clientId}/domain`, { method: "PUT", body: JSON.stringify({ manager_id: managerId, domain }) });
 }
 
+export function setClientCrowdin(clientId: number, managerId: number, usesCrowdin: boolean): Promise<ClientEntry> {
+  return request(`/clients/${clientId}/crowdin`, { method: "PUT", body: JSON.stringify({ manager_id: managerId, uses_crowdin: usesCrowdin }) });
+}
+
 export function setProjectClient(projectId: number, managerId: number, clientId: number | null): Promise<{ ok: boolean }> {
   return request(`/projects/${projectId}/client`, {
     method: "PUT",

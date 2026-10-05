@@ -19,6 +19,7 @@ export interface ClientEntry {
   id: number;
   name: string;
   domain?: string; // "betting" | "marketing" | ""
+  uses_crowdin?: boolean;
   projects: { id: number; name: string }[];
 }
 
@@ -117,6 +118,8 @@ export interface Finding {
   // its findings itself; anything under 40 is already dropped by the
   // backend. Always 100 on algorithmic findings. Absent on old reports.
   confidence?: number;
+  // Verbatim quote of the wrong spot (2026-10-05) — see locate.ts.
+  fragment?: string;
 }
 
 export interface SingleCheckHistoryEntry {
@@ -162,6 +165,8 @@ export interface MultiCheckSummary {
 }
 
 export interface MultiCheckResponse {
+  // Crowdin links required for the report (client works in Crowdin).
+  uses_crowdin?: boolean;
   multi_check_id: number;
   source_lang: string;
   // "processing" covers two different things now (see the "batch" flag

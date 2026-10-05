@@ -664,3 +664,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .convert-row { align-items: center; gap: 8px; flex-wrap: wrap; }
 .convert-row select { width: auto; min-width: 160px; }
 .convert-warn { margin: 6px 0 0; padding-left: 18px; }
+.finding-loc { margin-top: 6px; font-size: 0.85rem; color: var(--muted); white-space: pre-wrap; }
+.finding-loc mark, mark.loc { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
+.client-crowdin { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+.client-crowdin input { width: auto; margin: 0; }

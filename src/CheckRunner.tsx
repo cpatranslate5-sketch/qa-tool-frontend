@@ -9,6 +9,7 @@ import { alsoRowsSegments, buildChecksToSend, describeCostByModelRu, CHECK_OPTIO
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab, openSingleCheckReport } from "./reportHtml";
 import { notifyCheckFinished, requestNotificationPermission } from "./notify";
+import { isLongText, locateFinding, locationLabel } from "./locate";
 import type {
   Finding, Manager, MultiCheckResponse,
   Project,
@@ -32,7 +33,9 @@ function baseLang(code: string): string {
 // when the finding carries actual exception text, each exception's real
 // wording is shown highlighted red instead of just its row number — both
 // per Александр's ask (2026-09-17); see lang.ts's registerSummarySegments.
-function FindingRow({ f }: { f: Finding }) {
+function FindingRow({ f, source = "", translation = "" }: { f: Finding; source?: string; translation?: string }) {
+  const loc = locateFinding(f, source, translation);
+  const showLoc = !!loc && isLongText(loc.field === "translation" ? translation : source);
   if (f.type === "register_summary") {
     const segments = registerSummarySegments(f);
     return (
@@ -58,6 +61,11 @@ function FindingRow({ f }: { f: Finding }) {
           <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.color ? seg.text : <TagText text={seg.text} />}</span>
         ))}
       </div>
+      {showLoc && loc && (
+        <div className="finding-loc">
+          📍 {locationLabel(loc)}: {loc.before}<mark>{loc.fragment}</mark>{loc.after}
+        </div>
+      )}
     </div>
   );
 }
@@ -119,6 +127,8 @@ export default function CheckRunner({
   // Word / PowerPoint / JSON (2026-10-05): such a file (or an original +
   // translation pair) is first turned into the usual Excel table on the
   // server; from then on everything runs on that table (preparedFile).
+  // The exact texts the last text-pair check ran on — for «📍 где» lines.
+  const [checkedPair, setCheckedPair] = useState({ source: "", translation: "" });
   const [needsConvert, setNeedsConvert] = useState(false);
   const [preparedFile, setPreparedFile] = useState<File | null>(null);
   const [preparedUrl, setPreparedUrl] = useState("");
@@ -629,6 +639,7 @@ export default function CheckRunner({
           managerName: manager.name,
           managerId: manager.id,
         });
+        setCheckedPair({ source: sourceText, translation: translationText });
         setFindings(res.findings);
         setSingleCost(res.cost_usd);
         setSingleCheckId(res.single_check_id);
@@ -1033,7 +1044,7 @@ export default function CheckRunner({
             </button>
           )}
           {findings.length === 0 && <div className="muted">Проблем не найдено.</div>}
-          {findings.map((f, i) => <FindingRow key={i} f={f} />)}
+          {findings.map((f, i) => <FindingRow key={i} f={f} source={checkedPair.source} translation={checkedPair.translation} />)}
         </div>
       )}
 
@@ -1203,7 +1214,7 @@ export default function CheckRunner({
                             <div><strong>Источник:</strong> <TagText text={row.source} /></div>
                             <div><strong>Перевод:</strong> <TagText text={row.translation} /></div>
                           </div>
-                          {row.findings.map((f, fi) => <FindingRow key={fi} f={f} />)}
+                          {row.findings.map((f, fi) => <FindingRow key={fi} f={f} source={row.source} translation={row.translation} />)}
                         </div>
                       ))}
                     </div>

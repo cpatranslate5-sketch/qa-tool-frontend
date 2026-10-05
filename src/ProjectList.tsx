@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createClient, createProject, learningSummary, listClients, listProjects, setClientDomain, setProjectClient } from "./api";
+import { createClient, createProject, learningSummary, listClients, listProjects, setClientCrowdin, setClientDomain, setProjectClient } from "./api";
 import type { ClientEntry, Manager, Project } from "./types";
 
 // Main screen: «Заказчики» (2026-10-04) — each client with its styleguide
@@ -155,6 +155,15 @@ export default function ProjectList({
               >
                 {DOMAIN_LABELS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
+            ) : null}
+            {manager.is_admin ? (
+              <label className="client-crowdin" title="Если включено — к принятым замечаниям обязательны ссылки на Crowdin">
+                <input
+                  type="checkbox"
+                  checked={!!c.uses_crowdin}
+                  onChange={e => setClientCrowdin(c.id, manager.id, e.target.checked).then(reload).catch(() => setError("Не удалось сохранить."))}
+                /> Crowdin
+              </label>
             ) : (
               c.domain ? <span className="muted small">{DOMAIN_LABELS.find(d => d[0] === c.domain)?.[1]}</span> : null
             )}
