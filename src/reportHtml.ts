@@ -309,7 +309,10 @@ const REVIEW_SCRIPT = `
       warn.hidden = !noLinks || !!shares[shareLang()];
       warn.textContent = noLinks
         ? "⚠ Отчёт нельзя сгенерировать: у " + noLinks + " " + (noLinks % 10 === 1 && noLinks % 100 !== 11 ? "замечания" : "замечаний") +
-          " с ✓ или ? нет ссылки на Crowdin. Они подсвечены красной рамкой — добавьте ссылку в поле «Добавить ссылку(и)»."
+          " с ✓ или ? нет ссылки на Crowdin. Они подсвечены красной рамкой — добавьте ссылку в поле «Добавить ссылку(и)»." +
+          (RV_CFG.crowdinKnown
+            ? " (Ссылки обязательны, потому что у заказчика этого проекта стоит галочка «Crowdin» на главной.)"
+            : " (Сервер не сообщил, работает ли заказчик в Crowdin, — похоже, бэкенд на Railway ещё не обновился.)")
         : "";
     }
     btn.textContent = all ? "Сгенерировать отчёт по всем языкам" : "Сгенерировать отчёт для переводчика";
@@ -637,6 +640,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       singleLang: allLangs.length === 1 ? allLangs[0] : null,
       shares: result.shares || {},
       usesCrowdin: result.uses_crowdin !== false,
+      crowdinKnown: typeof result.uses_crowdin === "boolean",
     })};
     var RV_ITEMS = ${jsonForScript(reviewItems)};
     var RV_STATE = ${jsonForScript(result.review || {})};
