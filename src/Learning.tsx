@@ -45,6 +45,7 @@ function ItemCard({
 }) {
   const [text, setText] = useState(item.okk_note || item.translator_comment || "");
   const [scope, setScope] = useState(item.project_id ? "project" : "all");
+  const [projectIds, setProjectIds] = useState<number[]>([]);
   const [langScope, setLangScope] = useState("lang");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -95,10 +96,10 @@ function ItemCard({
         <div className="lr-form">
           <label className="sg-k">Суть для платформы (так модель это и прочитает)</label>
           <textarea rows={3} value={text} onChange={e => setText(e.target.value)} placeholder="Например: в узбекском hisoblandi значит «начислено», а не «подсчитано» — это не ошибка." />
-          <ScopeChooser item={item} scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope} />
+          <ScopeChooser item={item} scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope} projectIds={projectIds} setProjectIds={setProjectIds} />
           {error && <div className="error-box">{error}</div>}
           <div className="sg-actions">
-            <button type="button" disabled={busy || !text.trim()} onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope))}>
+            <button type="button" disabled={busy || !text.trim() || (scope === "projects" && projectIds.length === 0)} onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope, projectIds))}>
               Запомнить
             </button>
             {item.status === "new" && (
@@ -128,14 +129,15 @@ function ItemCard({
 function LessonCard({ lesson, manager, onChanged }: { lesson: Lesson; manager: Manager; onChanged: (l: Lesson) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(lesson.text);
-  const [scope, setScope] = useState(lesson.project_id ? "project" : lesson.client_id ? "client" : "all");
+  const [scope, setScope] = useState(lesson.project_ids?.length ? "projects" : lesson.project_id ? "project" : lesson.client_id ? "client" : "all");
+  const [projectIds, setProjectIds] = useState<number[]>(lesson.project_ids || (lesson.project_id ? [lesson.project_id] : []));
   const [langScope, setLangScope] = useState(lesson.lang_key ? "lang" : "all");
   const [showHistory, setShowHistory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const ex = lesson.example || {};
 
-  async function patch(p: { text?: string; scope?: string; lang_scope?: string; status?: string }) {
+  async function patch(p: { text?: string; scope?: string; lang_scope?: string; status?: string; project_ids?: number[] }) {
     setBusy(true);
     setError("");
     try {
@@ -166,6 +168,8 @@ function LessonCard({ lesson, manager, onChanged }: { lesson: Lesson; manager: M
           <ScopeChooser
             item={{ project_name: ex.project_name || "", client_id: 1, project_id: 1, lang_label: lesson.lang_label || ex.lang_code || "этот язык" }}
             scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope}
+            projectIds={projectIds} setProjectIds={setProjectIds}
+            presetProjectId={lesson.project_id} groupClientId={lesson.client_id}
           />
         </div>
       )}
@@ -179,7 +183,7 @@ function LessonCard({ lesson, manager, onChanged }: { lesson: Lesson; manager: M
         {!editing && lesson.status !== "deleted" && <button type="button" className="link-button" onClick={() => setEditing(true)}>Изменить / дополнить</button>}
         {editing && (
           <>
-            <button type="button" disabled={busy || !text.trim()} onClick={() => patch({ text, scope, lang_scope: langScope })}>Сохранить</button>
+            <button type="button" disabled={busy || !text.trim()} onClick={() => patch({ text, scope, lang_scope: langScope, ...(scope === "projects" ? { project_ids: projectIds } : {}) })}>Сохранить</button>
             <button type="button" className="secondary" disabled={busy} onClick={() => { setEditing(false); setText(lesson.text); }}>Отмена</button>
           </>
         )}

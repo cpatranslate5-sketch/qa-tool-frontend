@@ -685,3 +685,7 @@ details.full-text summary { cursor: pointer; color: var(--accent); }
 .cr-reply { margin-top: 8px; white-space: pre-wrap; }
 .cr-meta { margin-top: 8px; }
 .cr-toolbar { align-items: center; gap: 10px; margin: 10px 0; }
+.cr-note { margin-top: 4px; }
+.cr-note textarea { width: 100%; }
+.lr-projects { margin: 6px 0 0 22px; padding-left: 10px; border-left: 2px solid var(--border); max-height: 220px; overflow-y: auto; }
+.lr-projects-sep { margin-top: 6px; }

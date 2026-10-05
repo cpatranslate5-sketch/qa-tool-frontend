@@ -399,6 +399,7 @@ export interface LearningItem {
   translator_comment: string;
   okk_note: string;
   ai_review: AiReview | null;
+  admin_note: string;
   lesson_id: number | null;
   resolved_by_name: string;
   created_at: string | null;
@@ -416,6 +417,7 @@ export interface Lesson {
   id: number;
   text: string;
   project_id: number | null;
+  project_ids: number[] | null;
   client_id: number | null;
   lang_key: string;
   lang_label: string;
@@ -437,15 +439,18 @@ export function learningItems(managerId: number, status: string): Promise<{ item
   return request(`/learning/items?manager_id=${managerId}&status=${status}`);
 }
 
-export function learnItem(itemId: number, managerId: number, text: string, scope: string, langScope: string): Promise<{ item: LearningItem; lesson: Lesson }> {
+export function learnItem(itemId: number, managerId: number, text: string, scope: string, langScope: string, projectIds: number[] = []): Promise<{ item: LearningItem; lesson: Lesson }> {
   return request(`/learning/items/${itemId}/learn`, {
     method: "POST",
-    body: JSON.stringify({ manager_id: managerId, text, scope, lang_scope: langScope }),
+    body: JSON.stringify({ manager_id: managerId, text, scope, lang_scope: langScope, ...(scope === "projects" ? { project_ids: projectIds } : {}) }),
   });
 }
 
-export function reviewItem(itemId: number, managerId: number, force = false): Promise<{ item: LearningItem }> {
-  return request(`/learning/items/${itemId}/review`, { method: "POST", body: JSON.stringify({ manager_id: managerId, force }) });
+export function reviewItem(itemId: number, managerId: number, force = false, adminNote?: string): Promise<{ item: LearningItem }> {
+  return request(`/learning/items/${itemId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ manager_id: managerId, force, ...(adminNote !== undefined ? { admin_note: adminNote } : {}) }),
+  });
 }
 
 export function setItemStatus(itemId: number, managerId: number, status: string): Promise<{ item: LearningItem }> {
@@ -456,7 +461,7 @@ export function listLessons(managerId: number): Promise<{ lessons: Lesson[] }> {
   return request(`/learning/lessons?manager_id=${managerId}`);
 }
 
-export function updateLesson(lessonId: number, managerId: number, patch: { text?: string; scope?: string; lang_scope?: string; status?: string }): Promise<Lesson> {
+export function updateLesson(lessonId: number, managerId: number, patch: { text?: string; scope?: string; lang_scope?: string; status?: string; project_ids?: number[] }): Promise<Lesson> {
   return request(`/learning/lessons/${lessonId}`, { method: "PUT", body: JSON.stringify({ manager_id: managerId, ...patch }) });
 }
 

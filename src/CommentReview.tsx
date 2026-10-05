@@ -45,10 +45,13 @@ function ReviewCard({
   const [touched, setTouched] = useState(false);
   const [scope, setScope] = useState(scopeFor(item, r?.suggested_scope));
   const [langScope, setLangScope] = useState("lang");
+  const [projectIds, setProjectIds] = useState<number[]>([]);
   const [thinking, setThinking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [note, setNote] = useState(item.admin_note || "");
+  const [noteOpen, setNoteOpen] = useState(false);
 
   // A fresh opinion fills the draft — unless the admin has already typed something.
   useEffect(() => {
@@ -57,11 +60,12 @@ function ReviewCard({
     setScope(scopeFor(item, r.suggested_scope));
   }, [r?.at]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ask(force: boolean) {
+  async function ask(force: boolean, withNote?: string) {
     setThinking(true);
     setError("");
     try {
-      const res = await reviewItem(item.id, manager.id, force);
+      const res = await reviewItem(item.id, manager.id, force, withNote);
+      if (withNote !== undefined) { setTouched(false); setNoteOpen(false); }
       onReviewed(res.item);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не получилось.");
@@ -118,6 +122,32 @@ function ReviewCard({
         {item.translator_comment ? item.translator_comment : <span className="muted">нет — модель оценит сама</span>}
       </div>
 
+      <div className="small lr-line">
+        {!noteOpen && item.admin_note && (
+          <>
+            <strong>Моё пояснение:</strong> {item.admin_note}{" "}
+            <button type="button" className="link-button" onClick={() => setNoteOpen(true)}>изменить</button>
+          </>
+        )}
+        {!noteOpen && !item.admin_note && (
+          <button type="button" className="link-button" onClick={() => setNoteOpen(true)}>+ Добавить пояснение от себя</button>
+        )}
+        {noteOpen && (
+          <div className="cr-note">
+            <label className="sg-k">Моё пояснение — модель примет это как проверенный факт</label>
+            <textarea rows={2} value={note} onChange={e => setNote(e.target.value)}
+              placeholder="Например: «بونصات» — так называется раздел Bonuses на сайте 1win, название менять нельзя." />
+            <div className="sg-actions">
+              <button type="button" disabled={thinking || busyExternal || note.trim() === (item.admin_note || "").trim()}
+                onClick={() => ask(true, note)}>
+                Сохранить и разобрать с пояснением
+              </button>
+              <button type="button" className="secondary" onClick={() => { setNote(item.admin_note || ""); setNoteOpen(false); }}>Отмена</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="cr-ai">
         {!r && !thinking && (
           <button type="button" className="secondary" disabled={busyExternal} onClick={() => ask(false)}>
@@ -152,11 +182,12 @@ function ReviewCard({
         </label>
         <textarea rows={3} value={text} onChange={e => { setText(e.target.value); setTouched(true); }}
           placeholder={wrong ? "Модель считает замечание верным — урок, скорее всего, не нужен." : "Например: в узбекском hisoblandi значит «начислено», а не «подсчитано» — это не ошибка."} />
-        <ScopeChooser item={item} scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope} />
+        <ScopeChooser item={item} scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope}
+          projectIds={projectIds} setProjectIds={setProjectIds} />
         {error && <div className="error-box">{error}</div>}
         <div className="sg-actions">
-          <button type="button" className={wrong ? "secondary" : ""} disabled={busy || !text.trim()}
-            onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope))}>
+          <button type="button" className={wrong ? "secondary" : ""} disabled={busy || !text.trim() || (scope === "projects" && projectIds.length === 0)}
+            onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope, projectIds))}>
             Запомнить
           </button>
           {item.status === "new" && (
