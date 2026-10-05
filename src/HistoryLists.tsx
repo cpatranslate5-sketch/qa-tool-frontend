@@ -90,6 +90,7 @@ export function SingleCheckHistoryList({
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   // What the confirmation modal is currently asking about — a single entry
   // by id, "all" for the bulk "Удалить все" action, or null when the modal
   // is closed. Only one modal can be open at a time for this list.
@@ -97,7 +98,9 @@ export function SingleCheckHistoryList({
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
-    singleCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
+    singleCheckHistory(project.id, manager.id)
+      .then(h => { setHistory(h); setLoadError(""); })
+      .catch(e => setLoadError(`Не удалось загрузить историю точечных проверок: ${e instanceof Error ? e.message : "ошибка сервера"}. Проверки не удалены — попробуйте обновить страницу.`));
   }, [project.id, manager.id, refreshSignal]);
 
   async function performDelete(id: number) {
@@ -146,7 +149,7 @@ export function SingleCheckHistoryList({
     setConfirmTarget(id);
   }
 
-  if (history.length === 0) return null;
+  if (history.length === 0) return loadError ? <div className="error-box">{loadError}</div> : null;
 
   return (
     <div className="history">
@@ -283,13 +286,16 @@ export function MultiCheckHistoryList({
   const [collapsed, setCollapsed] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   // Same idea as SingleCheckHistoryList's confirmTarget — a single entry's
   // id, "all" for the bulk action, or null when no modal is open.
   const [confirmTarget, setConfirmTarget] = useState<number | "all" | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
-    multiCheckHistory(project.id, manager.id).then(setHistory).catch(() => {});
+    multiCheckHistory(project.id, manager.id)
+      .then(h => { setHistory(h); setLoadError(""); })
+      .catch(e => setLoadError(`Не удалось загрузить историю загрузок документов: ${e instanceof Error ? e.message : "ошибка сервера"}. Проверки не удалены — попробуйте обновить страницу.`));
   }, [project.id, manager.id, refreshSignal]);
 
   // While anything here is still processing, or has finished but is still
@@ -369,7 +375,7 @@ export function MultiCheckHistoryList({
     if (!opened) onOpen(h.id);
   }
 
-  if (history.length === 0) return null;
+  if (history.length === 0) return loadError ? <div className="error-box">{loadError}</div> : null;
 
   const confirmEntry = typeof confirmTarget === "number" ? history.find(h => h.id === confirmTarget) : null;
 
