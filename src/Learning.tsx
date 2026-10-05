@@ -9,8 +9,6 @@ import {
   type Lesson,
 } from "./api";
 import TagText from "./TagText";
-import { ScopeChooser } from "./LearningScope";
-import CommentReview from "./CommentReview";
 import { langLabel } from "./lang";
 import type { Manager } from "./types";
 
@@ -20,7 +18,7 @@ import type { Manager } from "./types";
 // with or without a comment). The admin writes the gist for the platform and
 // chooses where it applies; every verified lesson keeps its full history.
 
-type Tab = "review" | "new" | "postponed" | "learned" | "dismissed" | "lessons";
+type Tab = "new" | "postponed" | "learned" | "dismissed" | "lessons";
 
 const ACTION_LABEL: Record<string, string> = {
   created: "создан",
@@ -35,6 +33,32 @@ function fmt(iso: string | null) {
   return iso ? new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
 }
 
+function ScopeChooser({
+  item, scope, setScope, langScope, setLangScope,
+}: {
+  item: { project_name: string; client_name?: string; client_id: number | null; project_id: number | null; lang_label: string };
+  scope: string;
+  setScope: (v: string) => void;
+  langScope: string;
+  setLangScope: (v: string) => void;
+}) {
+  return (
+    <div className="lr-scope">
+      <div>
+        <div className="sg-k">Где действует</div>
+        <label className="sg-check"><input type="radio" checked={scope === "project"} disabled={!item.project_id} onChange={() => setScope("project")} /> Только проект «{item.project_name || "—"}»</label>
+        <label className="sg-check"><input type="radio" checked={scope === "client"} disabled={!item.client_id} onChange={() => setScope("client")} /> Все проекты заказчика{item.client_name ? ` «${item.client_name}»` : ""}</label>
+        <label className="sg-check"><input type="radio" checked={scope === "all"} onChange={() => setScope("all")} /> Все проекты</label>
+      </div>
+      <div>
+        <div className="sg-k">Язык</div>
+        <label className="sg-check"><input type="radio" checked={langScope === "lang"} onChange={() => setLangScope("lang")} /> Только {item.lang_label}</label>
+        <label className="sg-check"><input type="radio" checked={langScope === "all"} onChange={() => setLangScope("all")} /> Все языки</label>
+      </div>
+    </div>
+  );
+}
+
 function ItemCard({
   item, manager, onChanged, onOpenReport,
 }: {
@@ -45,7 +69,6 @@ function ItemCard({
 }) {
   const [text, setText] = useState(item.okk_note || item.translator_comment || "");
   const [scope, setScope] = useState(item.project_id ? "project" : "all");
-  const [projectIds, setProjectIds] = useState<number[]>([]);
   const [langScope, setLangScope] = useState("lang");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -96,10 +119,10 @@ function ItemCard({
         <div className="lr-form">
           <label className="sg-k">Суть для платформы (так модель это и прочитает)</label>
           <textarea rows={3} value={text} onChange={e => setText(e.target.value)} placeholder="Например: в узбекском hisoblandi значит «начислено», а не «подсчитано» — это не ошибка." />
-          <ScopeChooser item={item} scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope} projectIds={projectIds} setProjectIds={setProjectIds} />
+          <ScopeChooser item={item} scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope} />
           {error && <div className="error-box">{error}</div>}
           <div className="sg-actions">
-            <button type="button" disabled={busy || !text.trim() || (scope === "projects" && projectIds.length === 0)} onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope, projectIds))}>
+            <button type="button" disabled={busy || !text.trim()} onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope))}>
               Запомнить
             </button>
             {item.status === "new" && (
@@ -129,15 +152,14 @@ function ItemCard({
 function LessonCard({ lesson, manager, onChanged }: { lesson: Lesson; manager: Manager; onChanged: (l: Lesson) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(lesson.text);
-  const [scope, setScope] = useState(lesson.project_ids?.length ? "projects" : lesson.project_id ? "project" : lesson.client_id ? "client" : "all");
-  const [projectIds, setProjectIds] = useState<number[]>(lesson.project_ids || (lesson.project_id ? [lesson.project_id] : []));
+  const [scope, setScope] = useState(lesson.project_id ? "project" : lesson.client_id ? "client" : "all");
   const [langScope, setLangScope] = useState(lesson.lang_key ? "lang" : "all");
   const [showHistory, setShowHistory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const ex = lesson.example || {};
 
-  async function patch(p: { text?: string; scope?: string; lang_scope?: string; status?: string; project_ids?: number[] }) {
+  async function patch(p: { text?: string; scope?: string; lang_scope?: string; status?: string }) {
     setBusy(true);
     setError("");
     try {
@@ -168,8 +190,6 @@ function LessonCard({ lesson, manager, onChanged }: { lesson: Lesson; manager: M
           <ScopeChooser
             item={{ project_name: ex.project_name || "", client_id: 1, project_id: 1, lang_label: lesson.lang_label || ex.lang_code || "этот язык" }}
             scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope}
-            projectIds={projectIds} setProjectIds={setProjectIds}
-            presetProjectId={lesson.project_id} groupClientId={lesson.client_id}
           />
         </div>
       )}
@@ -183,7 +203,7 @@ function LessonCard({ lesson, manager, onChanged }: { lesson: Lesson; manager: M
         {!editing && lesson.status !== "deleted" && <button type="button" className="link-button" onClick={() => setEditing(true)}>Изменить / дополнить</button>}
         {editing && (
           <>
-            <button type="button" disabled={busy || !text.trim()} onClick={() => patch({ text, scope, lang_scope: langScope, ...(scope === "projects" ? { project_ids: projectIds } : {}) })}>Сохранить</button>
+            <button type="button" disabled={busy || !text.trim()} onClick={() => patch({ text, scope, lang_scope: langScope })}>Сохранить</button>
             <button type="button" className="secondary" disabled={busy} onClick={() => { setEditing(false); setText(lesson.text); }}>Отмена</button>
           </>
         )}
@@ -220,7 +240,7 @@ export default function Learning({
   onBack: () => void;
   onOpenReport: (projectId: number, multiCheckId: number) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("review");
+  const [tab, setTab] = useState<Tab>("new");
   const [items, setItems] = useState<LearningItem[] | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
@@ -229,14 +249,9 @@ export default function Learning({
   // Language filter (2026-10-04, Александр): "" = all languages. Kept across
   // tabs; a lesson for «все языки» is shown under every language too.
   const [langFilter, setLangFilter] = useState("");
-  const [reviewLangs, setReviewLangs] = useState<string[]>([]);
 
   function load(t: Tab = tab) {
     setError("");
-    if (t === "review") {
-      learningItems(manager.id, "new").then(r => setCounts(r.counts)).catch(() => {});
-      return;
-    }
     if (t === "lessons") {
       listLessons(manager.id).then(r => setLessons(r.lessons)).catch(() => setError("Не удалось загрузить уроки."));
       learningItems(manager.id, "new").then(r => setCounts(r.counts)).catch(() => {});
@@ -258,7 +273,6 @@ export default function Learning({
   }
 
   const tabs: [Tab, string][] = [
-    ["review", "🔍 Разбор комментариев"],
     ["new", `Новые${counts.new ? ` (${counts.new})` : ""}`],
     ["postponed", `Отложенные${counts.postponed ? ` (${counts.postponed})` : ""}`],
     ["learned", "Запомнено"],
@@ -267,9 +281,7 @@ export default function Learning({
   ];
   const itemKey = (it: LearningItem) => (it.lang_key || it.lang_code || "").toLowerCase();
   const langsHere = Array.from(new Set(
-    tab === "review"
-      ? reviewLangs
-      : tab === "lessons"
+    tab === "lessons"
       ? (lessons || []).map(l => (l.lang_key || "").toLowerCase()).filter(Boolean)
       : (items || []).map(itemKey).filter(Boolean),
   ));
@@ -308,12 +320,7 @@ export default function Learning({
         {langFilter && <button type="button" className="link-button" onClick={() => setLangFilter("")}>сбросить</button>}
       </div>
 
-      {tab === "review" && (
-        <CommentReview manager={manager} langFilter={langFilter} onLangs={setReviewLangs}
-          onOpenReport={onOpenReport} onCountsChanged={() => load("review")} />
-      )}
-
-      {tab !== "lessons" && tab !== "review" && (
+      {tab !== "lessons" && (
         <div className="lr-list">
           {items === null && <div className="muted">Загрузка…</div>}
           {items !== null && shownItems.length === 0 && <div className="muted">{langFilter ? "По этому языку здесь пусто." : "Здесь пусто."}</div>}

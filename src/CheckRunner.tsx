@@ -1230,7 +1230,7 @@ export default function CheckRunner({
                     </h4>
                     <div className="lang-results">
                       {rows.length === 0 && <div className="muted">Проблем не найдено.</div>}
-                      {rows.map((row, i) => (
+                      {rows.filter(r => r.findings.some(f => !f.deleted)).map((row, i) => (
                         <div key={i} className="multi-row">
                           <div className="multi-row-header">Строка {row.excel_row} — {row.context || "без контекста"}</div>
                           {isLongText(row.source) || isLongText(row.translation) ? (
@@ -1247,7 +1247,7 @@ export default function CheckRunner({
                               <div><strong>Перевод:</strong> <TagText text={row.translation} /></div>
                             </div>
                           )}
-                          {row.findings.map((f, fi) => <FindingRow key={fi} f={f} source={row.source} translation={row.translation} />)}
+                          {row.findings.map((f, fi) => f.deleted ? null : <FindingRow key={fi} f={f} source={row.source} translation={row.translation} />)}
                         </div>
                       ))}
                     </div>

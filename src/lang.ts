@@ -19,7 +19,7 @@ export function isRegisterSummaryRow(row: MultiCheckRowResult): boolean {
 // on-screen results) and reportHtml.ts (the downloadable/new-tab report),
 // so the two stay consistent.
 export function realRowCount(rows: MultiCheckRowResult[]): number {
-  return rows.filter(r => !isRegisterSummaryRow(r)).length;
+  return rows.filter(r => !isRegisterSummaryRow(r) && r.findings.some(f => !f.deleted)).length;
 }
 
 // Same idea as realRowCount above, but for a standalone text-pair check's
@@ -28,7 +28,7 @@ export function realRowCount(rows: MultiCheckRowResult[]): number {
 // exactly one register_summary finding and no real ones, and must show
 // "без проблем", not "1 найдено".
 export function realFindingCount(findings: Finding[]): number {
-  return findings.filter(f => f.type !== "register_summary").length;
+  return findings.filter(f => f.type !== "register_summary" && !f.deleted).length;
 }
 
 // The count shown in the "(N)" badge next to a language code on the
@@ -42,7 +42,7 @@ export function realFindingCount(findings: Finding[]): number {
 // exclusion as realRowCount/realFindingCount — that synthetic tone report
 // is informational, not a problem, and must never inflate this count.
 export function findingCountInRows(rows: MultiCheckRowResult[]): number {
-  return rows.reduce((sum, r) => sum + (isRegisterSummaryRow(r) ? 0 : r.findings.length), 0);
+  return rows.reduce((sum, r) => sum + (isRegisterSummaryRow(r) ? 0 : r.findings.filter(f => !f.deleted).length), 0);
 }
 
 // Turns a two-letter region code ("KZ") into its flag emoji by combining the
