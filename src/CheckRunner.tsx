@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  deleteMultiCheck, detectFileLanguages,
+  convertDocument, deleteMultiCheck, detectFileLanguages,
   knownLanguages, listLanguageAliases, multiCheck, multiCheckDetail, multiCheckReportUrl,
   runCheck, verifyLanguages,
 } from "./api";
@@ -116,6 +116,18 @@ export default function CheckRunner({
   // data — bumped on every onFileChosen call, checked before applying a result.
   const fileDetectToken = useRef(0);
   const [fileName, setFileName] = useState("");
+  // Word / PowerPoint / JSON (2026-10-05): such a file (or an original +
+  // translation pair) is first turned into the usual Excel table on the
+  // server; from then on everything runs on that table (preparedFile).
+  const [needsConvert, setNeedsConvert] = useState(false);
+  const [preparedFile, setPreparedFile] = useState<File | null>(null);
+  const [preparedUrl, setPreparedUrl] = useState("");
+  const [convertInfo, setConvertInfo] = useState<{ mode: string; rows: number; warnings: string[] } | null>(null);
+  const [convertTarget, setConvertTarget] = useState("");
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState("");
+  const translationInputRef = useRef<HTMLInputElement>(null);
+  const [translationName, setTranslationName] = useState("");
 
   // --- target language(s): single choice for a text pair, multi for a file ---
   // The ONLY source of the target-language checkboxes — the project's
@@ -388,7 +400,7 @@ export default function CheckRunner({
   const targetsReady = allLangs !== null;
 
   async function confirmLanguages() {
-    const file = fileInputRef.current?.files?.[0];
+    const file = currentFile();
     if (!file || targetLangsMulti.length === 0) return;
     setConfirmingLanguages(true);
     setError("");
@@ -417,7 +429,7 @@ export default function CheckRunner({
   }
 
   async function confirmSourceLang() {
-    const file = fileInputRef.current?.files?.[0];
+    const file = currentFile();
     if (!file || !sourceLang) return;
     setConfirmingSourceLang(true);
     setError("");
@@ -446,6 +458,44 @@ export default function CheckRunner({
     }
   }
 
+  // The table the check runs on: the uploaded Excel, or the prepared one.
+  function currentFile(): File | undefined {
+    if (needsConvert) return preparedFile || undefined;
+    return fileInputRef.current?.files?.[0];
+  }
+
+  function resetPrepared() {
+    setPreparedFile(null);
+    setConvertInfo(null);
+    setConvertError("");
+    setPreparedUrl(prev => { if (prev) URL.revokeObjectURL(prev); return ""; });
+  }
+
+  async function prepareDocument() {
+    const original = fileInputRef.current?.files?.[0];
+    const translation = translationInputRef.current?.files?.[0] || null;
+    if (!original || !sourceLang) return;
+    setConverting(true);
+    resetPrepared();
+    try {
+      const r = await convertDocument(project.id, original, translation, sourceLang, convertTarget);
+      const bytes = Uint8Array.from(atob(r.xlsx_b64), c => c.charCodeAt(0));
+      const name = translation ? `${original.name} ↔ ${translation.name}` : original.name;
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const prepared = new File([blob], name, { type: blob.type });
+      setPreparedFile(prepared);
+      setPreparedUrl(URL.createObjectURL(blob));
+      setConvertInfo(r.info);
+      setFileName(name);
+      if (convertTarget && targetCandidates.includes(convertTarget)) setTargetLangsMulti([convertTarget]);
+      await detectAndSetFileLanguages(prepared);
+    } catch (err) {
+      setConvertError(err instanceof Error ? err.message : "Не удалось подготовить документ.");
+    } finally {
+      setConverting(false);
+    }
+  }
+
   // Runs detect-languages for the given file and applies the result.
   async function detectAndSetFileLanguages(file: File) {
     const token = ++fileDetectToken.current;
@@ -468,14 +518,19 @@ export default function CheckRunner({
   }
 
   async function onFileChosen(file: File | undefined) {
-    setFileName(file?.name || "");
+    const isExcel = !file || file.name.toLowerCase().endsWith(".xlsx");
+    setNeedsConvert(!isExcel);
+    resetPrepared();
+    if (translationInputRef.current) translationInputRef.current.value = "";
+    setTranslationName("");
+    setFileName(isExcel ? (file?.name || "") : "");
     setTargetLangsMulti([]);
     setLangListText("");
     setLangListUnmatched([]);
     setFileUnrecognizedCols([]);
     setFileUnknownLanguages([]);
     setFileDuplicateLanguages({});
-    if (!file) {
+    if (!file || !isExcel) {
       setFileLangs(null);
       fileDetectToken.current++; // invalidate any detection still in flight
       return;
@@ -579,7 +634,7 @@ export default function CheckRunner({
         setSingleCheckId(res.single_check_id);
         setSingleHistorySignal(s => s + 1);
       } else {
-        const file = fileInputRef.current?.files?.[0];
+        const file = currentFile();
         if (!file) return;
         const res = await multiCheck(project.id, file, sourceLang, manager.name, manager.id, checksToSend, comment, targetLangsMulti);
         setMultiResult(res);
@@ -705,13 +760,57 @@ export default function CheckRunner({
           </div>
         ) : (
           <div>
-            <label>Файл Excel (экспорт из Crowdin)</label>
+            <label>Файл: Excel, Word, PowerPoint или JSON</label>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx"
+              accept=".xlsx,.docx,.pptx,.json"
               onChange={e => onFileChosen(e.target.files?.[0])}
             />
+            {needsConvert && (
+              <div className="convert-box">
+                <p className="muted small">
+                  Документ не в Excel — платформа сначала соберёт из него таблицу «оригинал — перевод».
+                  Word: таблица внутри документа <b>или</b> два файла (оригинал и перевод). PowerPoint и JSON —
+                  два файла (JSON можно и одним, если в нём все языки).
+                </p>
+                <label className="small">Перевод отдельным файлом (если оригинал и перевод — разные файлы)</label>
+                <input
+                  ref={translationInputRef}
+                  type="file"
+                  accept=".docx,.pptx,.json"
+                  onChange={e => { setTranslationName(e.target.files?.[0]?.name || ""); resetPrepared(); setFileName(""); setFileLangs(null); }}
+                />
+                <div className="inline-form convert-row">
+                  <label className="small">Язык перевода:</label>
+                  <select value={convertTarget} onChange={e => { setConvertTarget(e.target.value); resetPrepared(); setFileName(""); setFileLangs(null); }}>
+                    <option value="">{translationName ? "Выберите…" : "из подписей колонок в файле"}</option>
+                    {targetCandidates.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={prepareDocument}
+                    disabled={converting || !sourceLang || (!!translationName && !convertTarget)}
+                  >
+                    {converting ? "Собираю таблицу…" : "Подготовить к проверке"}
+                  </button>
+                </div>
+                {!sourceLang && <p className="muted small">Сначала выберите язык оригинала (шаг 1).</p>}
+                {convertError && <div className="error-box">{convertError}</div>}
+                {convertInfo && (
+                  <div className="success-box">
+                    ✓ {convertInfo.mode}: строк для проверки — {convertInfo.rows}.{" "}
+                    <a href={preparedUrl} download={`${fileName || "таблица"} — таблица.xlsx`}>Скачать таблицу сопоставления</a>
+                    {convertInfo.warnings.length > 0 && (
+                      <ul className="convert-warn">
+                        {convertInfo.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {sourceLang && fileName && (
               <div style={{ marginTop: 10 }}>
                 <button type="button" className="secondary" onClick={confirmSourceLang} disabled={confirmingSourceLang}>

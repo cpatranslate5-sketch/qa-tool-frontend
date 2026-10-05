@@ -473,3 +473,16 @@ export function adminMoveCheck(managerId: number, kind: string, checkId: number,
     body: JSON.stringify({ manager_id: managerId, kind, check_id: checkId, folder_id: folderId }),
   });
 }
+
+// --- Word / PowerPoint / JSON → Excel table (2026-10-05) ---
+export type ConvertInfo = { mode: string; rows: number; sheets: number; warnings: string[] };
+export function convertDocument(
+  projectId: number, original: File, translation: File | null, sourceLang: string, targetLang: string,
+): Promise<{ xlsx_b64: string; info: ConvertInfo }> {
+  const fd = new FormData();
+  fd.append("original", original);
+  if (translation) fd.append("translation", translation);
+  fd.append("source_lang", sourceLang);
+  fd.append("target_lang", targetLang);
+  return requestForm(`/projects/${projectId}/convert`, fd);
+}
