@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { createClient, createProject, learningSummary, listClients, listProjects, setProjectClient } from "./api";
+import { createClient, createProject, learningSummary, listClients, listProjects, setClientDomain, setProjectClient } from "./api";
 import type { ClientEntry, Manager, Project } from "./types";
 
 // Main screen: «Заказчики» (2026-10-04) — each client with its styleguide
 // button and its projects — then projects without a client.
+// Subject area of a client's projects — picks the «ТЕМАТИКА» note for the AI.
+const DOMAIN_LABELS: [string, string][] = [
+  ["", "Тематика не задана"],
+  ["betting", "Беттинг и гемблинг"],
+  ["marketing", "Общий маркетинг"],
+];
+
 export default function ProjectList({
   manager,
   onOpenProject,
@@ -139,6 +146,18 @@ export default function ProjectList({
           <div className="client-head">
             <h2>🏢 {c.name}</h2>
             <button type="button" className="link-button" onClick={() => onOpenClientStyleguide(c)}>📘 Стайлгайд заказчика</button>
+            {manager.is_admin ? (
+              <select
+                className="client-domain"
+                value={c.domain || ""}
+                title="Тематика текстов — подсказка для ИИ, в каком значении читать слова"
+                onChange={e => setClientDomain(c.id, manager.id, e.target.value).then(reload).catch(() => setError("Не удалось сменить тематику."))}
+              >
+                {DOMAIN_LABELS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            ) : (
+              c.domain ? <span className="muted small">{DOMAIN_LABELS.find(d => d[0] === c.domain)?.[1]}</span> : null
+            )}
           </div>
           {c.projects.length === 0 && <div className="muted small">Проектов пока нет.</div>}
           <div className="folder-grid">

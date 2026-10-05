@@ -18,6 +18,7 @@ export interface Project {
 export interface ClientEntry {
   id: number;
   name: string;
+  domain?: string; // "betting" | "marketing" | ""
   projects: { id: number; name: string }[];
 }
 

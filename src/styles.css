@@ -656,3 +656,6 @@ button:disabled { opacity: 0.5; cursor: default; }
 .lr-history { margin-top: 8px; }
 .lr-langfilter { align-items: center; gap: 8px; margin-top: 10px; }
 .lr-langfilter select { max-width: 240px; }
+.client-domain { width: auto; max-width: 220px; font-size: 0.85rem; padding: 4px 8px; }
+.client-head { justify-content: flex-start; }
+.client-head > .link-button { margin-left: auto; }
