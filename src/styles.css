@@ -668,3 +668,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .finding-loc mark, mark.loc { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
 .client-crowdin { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); }
 .client-crowdin input { width: auto; margin: 0; }
+.finding-excerpt { margin-top: 6px; padding: 6px 8px; background: rgba(127,127,127,0.08); border-radius: 6px; white-space: pre-wrap; font-size: 0.85rem; }
+.finding-excerpt mark { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
+details.full-text { margin-bottom: 6px; font-size: 0.85rem; }
+details.full-text summary { cursor: pointer; color: var(--accent); }

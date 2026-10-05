@@ -9,7 +9,7 @@ import { describeCostByModelRu, alsoRowsSegments, TAG_COLOR, tagSegments, descri
 import { toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
 import { API_URL, multiCheckDetail, multiCheckReportUrl, singleCheckReport } from "./api";
 import type { Finding, MultiCheckResponse, ReviewEntry, TranslatorEntry } from "./types";
-import { isLongText, locateFinding, locationLabel, type FindingLocation } from "./locate";
+import { excerptFor, excerptLabel, isLongText, locateFinding, locationLabel, type Excerpt, type ExcerptPart, type FindingLocation } from "./locate";
 
 function esc(s: string): string {
   return String(s ?? "")
@@ -37,6 +37,22 @@ function markedHtml(text: string, ranges: { start: number; end: number }[]): str
     pos = r.end;
   }
   return out + tagHtml(text.slice(pos));
+}
+
+function partHtml(p: ExcerptPart): string {
+  const body = p.mark
+    ? tagHtml(p.text.slice(0, p.mark[0])) + `<mark class="loc">${tagHtml(p.text.slice(p.mark[0], p.mark[1]))}</mark>` + tagHtml(p.text.slice(p.mark[1]))
+    : tagHtml(p.text);
+  return (p.cutStart ? "…" : "") + body + (p.cutEnd ? "…" : "");
+}
+
+// Only the paragraph with the error, source and translation (long texts).
+function excerptHtml(ex: Excerpt | null): string {
+  if (!ex) return "";
+  return `<div class="pair excerpt">
+    <div><strong>${esc(excerptLabel("Источник", ex.source))}</strong> ${partHtml(ex.source)}</div>
+    <div><strong>${esc(excerptLabel("Перевод", ex.translation))}</strong> ${partHtml(ex.translation)}</div>
+  </div>`;
 }
 
 function locHtml(loc: FindingLocation | null, show: boolean): string {
@@ -177,6 +193,9 @@ const REPORT_CSS = `
   .finding-loc { margin-top: 6px; font-size: 0.85rem; color: #555; white-space: pre-wrap; }
   mark.loc { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
   .pair div { white-space: pre-wrap; }
+  .pair.excerpt { margin: 8px 0 4px; padding: 6px 8px; background: rgba(0,0,0,0.03); border-radius: 6px; }
+  details.full-text { margin-bottom: 8px; font-size: 0.85rem; }
+  details.full-text summary { cursor: pointer; color: #4f46e5; margin-bottom: 4px; }
   .rv-link-warn { margin-top: 8px; color: #b42318; background: #fff4f2; border: 1px solid #f0b4b4; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; font-weight: 600; }
   .rv-item.missing-link { box-shadow: inset 0 0 0 2px #dc2626; }
   .rv-item.missing-link .rv-links { border-color: #dc2626; background: #fff4f2; }
@@ -481,10 +500,15 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                 return `<button type="button" class="save-btn${saved ? " saved" : ""}" data-save="${esc(sk)}" data-sheet="${sheetIdx}" data-lang="${esc(lang)}" data-row="${row.excel_row}" title="${saved ? "Уже в «Сохранённом»" : "Сохранить блок в «Сохранённое»"}">${saved ? "✅" : "💾"}</button>`;
               })() : ""}
               <div class="multi-row-header">${row.excel_row === 0 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
-              ${row.excel_row === 0 ? "" : `<div class="pair">
+              ${row.excel_row === 0 ? "" : (() => {
+                const pair = `<div class="pair">
                 <div><strong>Источник:</strong> ${markedHtml(row.source || "", rangesFor("source"))}</div>
                 <div><strong>Перевод:</strong> ${markedHtml(row.translation || "", rangesFor("translation"))}</div>
-              </div>`}
+              </div>`;
+                // Long text: the full pair is folded away; each finding shows
+                // just its own paragraph (2026-10-05).
+                return longText ? `<details class="full-text"><summary>Показать весь текст</summary>${pair}</details>` : pair;
+              })()}
               ${row.findings.map((f, fi) => {
                 let rv: ReviewInfo | null = null;
                 if (isReviewable(row.excel_row, f)) {
@@ -496,7 +520,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                     reviewItems[key] = { lang, num };
                   }
                 }
-                return findingHtml(f, rv, locHtml(locs[fi], longText));
+                const ex = longText ? excerptFor(f, row.source || "", row.translation || "") : null;
+                return findingHtml(f, rv, ex ? excerptHtml(ex) : locHtml(locs[fi], longText));
               }).join("")}
             </div>
           `;

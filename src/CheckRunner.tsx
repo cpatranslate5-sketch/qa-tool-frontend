@@ -9,7 +9,7 @@ import { alsoRowsSegments, buildChecksToSend, describeCostByModelRu, CHECK_OPTIO
 import { MultiCheckHistoryList, SingleCheckHistoryList } from "./HistoryLists";
 import { openReportInNewTab, openSingleCheckReport } from "./reportHtml";
 import { notifyCheckFinished, requestNotificationPermission } from "./notify";
-import { isLongText, locateFinding, locationLabel } from "./locate";
+import { excerptFor, excerptLabel, isLongText, locateFinding, locationLabel, type ExcerptPart } from "./locate";
 import type {
   Finding, Manager, MultiCheckResponse,
   Project,
@@ -33,9 +33,26 @@ function baseLang(code: string): string {
 // when the finding carries actual exception text, each exception's real
 // wording is shown highlighted red instead of just its row number — both
 // per Александр's ask (2026-09-17); see lang.ts's registerSummarySegments.
+function ExcerptText({ p }: { p: ExcerptPart }) {
+  return (
+    <>
+      {p.cutStart && "…"}
+      {p.mark ? (
+        <>
+          <TagText text={p.text.slice(0, p.mark[0])} />
+          <mark>{p.text.slice(p.mark[0], p.mark[1])}</mark>
+          <TagText text={p.text.slice(p.mark[1])} />
+        </>
+      ) : <TagText text={p.text} />}
+      {p.cutEnd && "…"}
+    </>
+  );
+}
+
 function FindingRow({ f, source = "", translation = "" }: { f: Finding; source?: string; translation?: string }) {
   const loc = locateFinding(f, source, translation);
   const showLoc = !!loc && isLongText(loc.field === "translation" ? translation : source);
+  const ex = excerptFor(f, source, translation);
   if (f.type === "register_summary") {
     const segments = registerSummarySegments(f);
     return (
@@ -61,7 +78,13 @@ function FindingRow({ f, source = "", translation = "" }: { f: Finding; source?:
           <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.color ? seg.text : <TagText text={seg.text} />}</span>
         ))}
       </div>
-      {showLoc && loc && (
+      {ex && (
+        <div className="history-pair finding-excerpt">
+          <div><strong>{excerptLabel("Источник", ex.source)}</strong> <ExcerptText p={ex.source} /></div>
+          <div><strong>{excerptLabel("Перевод", ex.translation)}</strong> <ExcerptText p={ex.translation} /></div>
+        </div>
+      )}
+      {!ex && showLoc && loc && (
         <div className="finding-loc">
           📍 {locationLabel(loc)}: {loc.before}<mark>{loc.fragment}</mark>{loc.after}
         </div>
@@ -1210,10 +1233,20 @@ export default function CheckRunner({
                       {rows.map((row, i) => (
                         <div key={i} className="multi-row">
                           <div className="multi-row-header">Строка {row.excel_row} — {row.context || "без контекста"}</div>
-                          <div className="history-pair">
-                            <div><strong>Источник:</strong> <TagText text={row.source} /></div>
-                            <div><strong>Перевод:</strong> <TagText text={row.translation} /></div>
-                          </div>
+                          {isLongText(row.source) || isLongText(row.translation) ? (
+                            <details className="full-text">
+                              <summary>Показать весь текст</summary>
+                              <div className="history-pair">
+                                <div><strong>Источник:</strong> <TagText text={row.source} /></div>
+                                <div><strong>Перевод:</strong> <TagText text={row.translation} /></div>
+                              </div>
+                            </details>
+                          ) : (
+                            <div className="history-pair">
+                              <div><strong>Источник:</strong> <TagText text={row.source} /></div>
+                              <div><strong>Перевод:</strong> <TagText text={row.translation} /></div>
+                            </div>
+                          )}
                           {row.findings.map((f, fi) => <FindingRow key={fi} f={f} source={row.source} translation={row.translation} />)}
                         </div>
                       ))}
