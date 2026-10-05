@@ -201,6 +201,7 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 // instead of looking it up here.
 export const TYPE_LABEL: Record<string, string> = {
   system: "⚠ Внимание",
+  manual: "От менеджера",
   sms_charset: "SMS-алфавит",
   // "other" is a genuine finding the AI flagged as a real, serious problem
   // that didn't fit any of the checks actually selected (see

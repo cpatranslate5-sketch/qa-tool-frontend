@@ -203,6 +203,11 @@ const REPORT_CSS = `
   .rv-edit-err { color: #b42318; font-size: 0.85rem; }
   .rv-edit-warn { color: #b42318; font-size: 0.9rem; }
   .rv-edited { color: #888; font-size: 0.8rem; }
+  .rv-add-btn { margin-top: 8px; border: 1px dashed #4f46e5; color: #4f46e5; background: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 0.85rem; }
+  .rv-add-lang { margin: 6px 0 14px; }
+  .rv-addbox select { padding: 4px 6px; border: 1px solid #ccd; border-radius: 6px; }
+  .rv-addbox textarea { margin-bottom: 6px; }
+  .rv-label { display: block; font-size: 0.85rem; color: #555; margin: 4px 0 2px; }
   .finding-loc { margin-top: 6px; font-size: 0.85rem; color: #555; white-space: pre-wrap; }
   mark.loc { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
   .pair div { white-space: pre-wrap; }
@@ -496,6 +501,82 @@ const REVIEW_SCRIPT = `
       }).catch(function (e) { ok.disabled = false; err.textContent = e.message; });
     });
   });
+  // ➕ The manager's own remark for the translator (2026-10-05): to a row
+  // of the report or to the language as a whole; needs the folder password.
+  function escHtml(v) {
+    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target.closest && ev.target.closest(".rv-add-btn");
+    if (!t) return;
+    var next = t.nextElementSibling;
+    if (next && next.classList.contains("rv-addbox")) { next.remove(); return; }
+    var free = t.classList.contains("rv-add-lang");
+    var box = document.createElement("div");
+    box.className = "rv-editbox rv-addbox";
+    box.innerHTML = (free
+        ? '<label class="rv-label">Источник (необязательно):</label><textarea class="rv-add-src"></textarea>' +
+          '<label class="rv-label">Перевод (необязательно):</label><textarea class="rv-add-trn"></textarea>'
+        : "") +
+      '<label class="rv-label">Ваш комментарий для переводчика:</label><textarea class="rv-add-msg"></textarea>' +
+      '<div class="rv-edit-row"><select class="rv-add-sev"><option value="high">Важно</option><option value="medium" selected>Средне</option><option value="low">Мелочь</option></select>' +
+      '<input type="password" class="rv-edit-code" placeholder="Пароль папки" autocomplete="current-password">' +
+      '<button type="button" class="rv-edit-ok">Добавить</button><button type="button" class="rv-edit-cancel">Отмена</button>' +
+      '<span class="rv-edit-err"></span></div>';
+    t.insertAdjacentElement("afterend", box);
+    (box.querySelector(".rv-add-src") || box.querySelector(".rv-add-msg")).focus();
+    box.querySelector(".rv-edit-cancel").addEventListener("click", function () { box.remove(); });
+    box.querySelector(".rv-edit-ok").addEventListener("click", function () {
+      var ok = this, err = box.querySelector(".rv-edit-err");
+      var msg = box.querySelector(".rv-add-msg").value.trim();
+      var code = box.querySelector(".rv-edit-code").value;
+      if (!msg) { err.textContent = "Напишите комментарий."; return; }
+      if (!code) { err.textContent = "Введите пароль папки."; return; }
+      ok.disabled = true; err.textContent = "";
+      var lang = t.getAttribute("data-lang");
+      var payload = {
+        manager_id: RV_CFG.managerId, code: code, sheet_idx: Number(t.getAttribute("data-sheet")), lang: lang,
+        excel_row: free ? null : Number(t.getAttribute("data-row")), message: msg,
+        severity: box.querySelector(".rv-add-sev").value,
+        source: free ? box.querySelector(".rv-add-src").value : null,
+        translation: free ? box.querySelector(".rv-add-trn").value : null
+      };
+      fetch(apiBase() + "/finding-add", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (body) {
+          if (!r.ok) throw new Error(body.detail || "Не удалось добавить.");
+          return body;
+        });
+      }).then(function (body) {
+        var f = body.finding, sevLabel = { high: "Важно", medium: "Средне", low: "Мелочь" }[f.severity] || f.severity;
+        var item = document.createElement("div");
+        item.className = "finding finding-" + f.severity + " rv-item";
+        item.setAttribute("data-key", body.key);
+        item.innerHTML = RV_CFG.cornerHtml + '<span class="rv-num">новое</span>' +
+          '<span class="finding-severity">' + escHtml(sevLabel) + '</span><span class="finding-type">От менеджера</span>' +
+          '<div class="finding-message">' + escHtml(f.message) + '</div>' + RV_CFG.fieldsHtml;
+        var holder = item;
+        if (free) {
+          holder = document.createElement("div");
+          holder.className = "multi-row";
+          var src = (body.row.source || "").trim(), trn = (body.row.translation || "").trim();
+          holder.innerHTML = '<div class="multi-row-header">Замечание менеджера</div>' +
+            (src || trn ? '<div class="pair"><div><strong>Источник:</strong> ' + escHtml(src) + '</div><div><strong>Перевод:</strong> ' + escHtml(trn) + '</div></div>' : "");
+          holder.appendChild(item);
+          var results = t.parentElement.querySelector(".lang-results");
+          (results || t.parentElement).appendChild(holder);
+        } else {
+          t.insertAdjacentElement("beforebegin", item);
+        }
+        RV_ITEMS[body.key] = { lang: lang, num: 0 };
+        RV_STATE[body.key] = { decision: "accept", links: "", note: "" };
+        paint(body.key);
+        updateBar();
+        box.remove();
+      }).catch(function (e) { ok.disabled = false; err.textContent = e.message; });
+    });
+  });
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest(".save-btn");
     if (!b || b.classList.contains("saved") || b.disabled) return;
@@ -570,8 +651,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                 const saved = savedKeys.has(sk);
                 return `<button type="button" class="save-btn${saved ? " saved" : ""}" data-save="${esc(sk)}" data-sheet="${sheetIdx}" data-lang="${esc(lang)}" data-row="${row.excel_row}" title="${saved ? "Уже в «Сохранённом»" : "Сохранить блок в «Сохранённое»"}">${saved ? "✅" : "💾"}</button>`;
               })() : ""}
-              <div class="multi-row-header">${row.excel_row === 0 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
-              ${row.excel_row === 0 ? "" : (() => {
+              <div class="multi-row-header">${row.excel_row === 0 || row.excel_row >= 100000 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
+              ${row.excel_row === 0 || (row.excel_row >= 100000 && !(row.source || "").trim() && !(row.translation || "").trim()) ? "" : (() => {
                 const pair = `<div class="pair">
                 <div><strong>Источник:</strong> ${markedHtml(row.source || "", rangesFor("source"))}</div>
                 <div><strong>Перевод:</strong> ${markedHtml(row.translation || "", rangesFor("translation"))}</div>
@@ -595,6 +676,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                 const ex = longText ? excerptFor(f, row.source || "", row.translation || "") : null;
                 return findingHtml(f, rv, ex ? excerptHtml(ex) : locHtml(locs[fi], longText));
               }).join("")}
+              ${reviewEnabled && row.excel_row !== 0 ? `<button type="button" class="rv-add-btn" data-sheet="${sheetIdx}" data-lang="${esc(lang)}" data-row="${row.excel_row}">➕ Своё замечание к этой строке</button>` : ""}
             </div>
           `;
       };
@@ -612,6 +694,7 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
         <div class="lang-block" data-lang="${esc(lang)}">
           <h4 class="lang-block-title ${realCount > 0 ? "has-findings" : ""}">${esc(flagForLang(lang))} ${esc(lang)} — ${realCount > 0 ? `${realCount} найдено` : "без проблем"}</h4>
           <div class="lang-results">${rowsHtml}</div>
+          ${reviewEnabled ? `<button type="button" class="rv-add-btn rv-add-lang" data-sheet="${sheetIdx}" data-lang="${esc(lang)}">➕ Своё замечание по языку ${esc(lang)} (не к строке из отчёта)</button>` : ""}
         </div>
       `;
     }).join("");
@@ -737,6 +820,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       multiCheckId: result.multi_check_id,
       singleLang: allLangs.length === 1 ? allLangs[0] : null,
       shares: result.shares || {},
+      cornerHtml: reviewCornerHtml(),
+      fieldsHtml: reviewFieldsHtml(),
       usesCrowdin: result.uses_crowdin !== false,
       crowdinKnown: typeof result.uses_crowdin === "boolean",
     })};
