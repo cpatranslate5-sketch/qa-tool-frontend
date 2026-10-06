@@ -36,7 +36,7 @@ export function generalKey(lang: string): string {
 }
 
 export function isReviewable(excelRow: number, f: Finding): boolean {
-  return excelRow !== 0 && f.type !== "register_summary" && f.type !== "system" && !f.deleted;
+  return excelRow !== 0 && f.type !== "register_summary" && f.type !== "system";
 }
 
 // ✓ / ? / ✕ in the finding's top-right corner. «?» = «под вопросом»: the

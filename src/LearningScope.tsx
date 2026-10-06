@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listProjects } from "./api";
+import { listProjects, styleguideMeta } from "./api";
 import type { Project } from "./types";
 
 // Shared by «Обучение платформы» and «Разбор комментариев».
@@ -12,8 +12,15 @@ function allProjects(): Promise<Project[]> {
   return projectsCache;
 }
 
+let langsCache: Promise<{ key: string; label: string }[]> | null = null;
+function allLangs(): Promise<{ key: string; label: string }[]> {
+  if (!langsCache) langsCache = styleguideMeta().then(m => m.langs).catch(() => { langsCache = null; return []; });
+  return langsCache;
+}
+
 export function ScopeChooser({
   item, scope, setScope, langScope, setLangScope, projectIds, setProjectIds, presetProjectId, groupClientId,
+  langKeys, setLangKeys, presetLangKey,
 }: {
   item: { project_name: string; client_name?: string; client_id: number | null; project_id: number | null; lang_label: string };
   scope: string;
@@ -25,6 +32,9 @@ export function ScopeChooser({
   // The lesson editor passes a placeholder item; these carry the real values.
   presetProjectId?: number | null;
   groupClientId?: number | null;
+  langKeys: string[];
+  setLangKeys: (v: string[]) => void;
+  presetLangKey?: string;
 }) {
   const preset = presetProjectId !== undefined ? presetProjectId : item.project_id;
   const groupClient = groupClientId !== undefined ? groupClientId : item.client_id;
@@ -32,6 +42,20 @@ export function ScopeChooser({
   useEffect(() => {
     if (scope === "projects" && projects === null) allProjects().then(setProjects);
   }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [langs, setLangs] = useState<{ key: string; label: string }[] | null>(null);
+  useEffect(() => {
+    if (langScope === "langs" && langs === null) allLangs().then(setLangs);
+  }, [langScope]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function pickLangs() {
+    setLangScope("langs");
+    if (langKeys.length === 0 && presetLangKey) setLangKeys([presetLangKey]);
+  }
+
+  function toggleLang(k: string) {
+    setLangKeys(langKeys.includes(k) ? langKeys.filter(x => x !== k) : [...langKeys, k]);
+  }
 
   function pickProjects() {
     setScope("projects");
@@ -82,7 +106,19 @@ export function ScopeChooser({
       <div>
         <div className="sg-k">Язык</div>
         <label className="sg-check"><input type="radio" checked={langScope === "lang"} onChange={() => setLangScope("lang")} /> Только {item.lang_label}</label>
+        <label className="sg-check"><input type="radio" checked={langScope === "langs"} onChange={pickLangs} /> Выбранные языки{langScope === "langs" && langKeys.length ? ` (${langKeys.length})` : "…"}</label>
         <label className="sg-check"><input type="radio" checked={langScope === "all"} onChange={() => setLangScope("all")} /> Все языки</label>
+        {langScope === "langs" && (
+          <div className="lr-projects lr-langs">
+            {langs === null && <div className="muted small">Загрузка языков…</div>}
+            {(langs || []).map(l => (
+              <label key={l.key} className="sg-check">
+                <input type="checkbox" checked={langKeys.includes(l.key)} onChange={() => toggleLang(l.key)} /> {l.label}
+              </label>
+            ))}
+            {langs !== null && langKeys.length === 0 && <div className="muted small">Отметьте хотя бы один язык.</div>}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -120,10 +120,6 @@ export interface Finding {
   confidence?: number;
   // Verbatim quote of the wrong spot (2026-10-05) — see locate.ts.
   fragment?: string;
-  // Changed / removed by the manager in the report (2026-10-05).
-  deleted?: boolean;
-  edited_by?: string;
-  original_message?: string;
 }
 
 export interface SingleCheckHistoryEntry {

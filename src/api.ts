@@ -364,6 +364,19 @@ export function revertStyleguideChange<T>(changeId: number, managerId: number): 
 }
 
 // --- «Обучение платформы» (2026-10-04) ---
+// «Разбор комментариев» (2026-10-05): the language's own model's second opinion.
+export interface AiReview {
+  verdict: "translator_right" | "partly" | "translator_wrong" | "unclear";
+  confidence: number;
+  reasoning: string;
+  lesson: string;
+  suggested_scope: "project" | "client" | "all";
+  translator_reply: string;
+  model: string;
+  cost_usd: number;
+  at: string;
+}
+
 export interface LearningItem {
   id: number;
   origin: "okk" | "translator";
@@ -385,6 +398,8 @@ export interface LearningItem {
   translation: string;
   translator_comment: string;
   okk_note: string;
+  ai_review: AiReview | null;
+  admin_note: string;
   lesson_id: number | null;
   resolved_by_name: string;
   created_at: string | null;
@@ -402,8 +417,10 @@ export interface Lesson {
   id: number;
   text: string;
   project_id: number | null;
+  project_ids: number[] | null;
   client_id: number | null;
   lang_key: string;
+  lang_keys: string[] | null;
   lang_label: string;
   scope_label: string;
   example: { finding_message?: string; source?: string; translation?: string; project_name?: string; lang_code?: string; item_id?: number };
@@ -423,10 +440,17 @@ export function learningItems(managerId: number, status: string): Promise<{ item
   return request(`/learning/items?manager_id=${managerId}&status=${status}`);
 }
 
-export function learnItem(itemId: number, managerId: number, text: string, scope: string, langScope: string): Promise<{ item: LearningItem; lesson: Lesson }> {
+export function learnItem(itemId: number, managerId: number, text: string, scope: string, langScope: string, projectIds: number[] = [], langKeys: string[] = []): Promise<{ item: LearningItem; lesson: Lesson }> {
   return request(`/learning/items/${itemId}/learn`, {
     method: "POST",
-    body: JSON.stringify({ manager_id: managerId, text, scope, lang_scope: langScope }),
+    body: JSON.stringify({ manager_id: managerId, text, scope, lang_scope: langScope, ...(scope === "projects" ? { project_ids: projectIds } : {}), ...(langScope === "langs" ? { lang_keys: langKeys } : {}) }),
+  });
+}
+
+export function reviewItem(itemId: number, managerId: number, force = false, adminNote?: string): Promise<{ item: LearningItem }> {
+  return request(`/learning/items/${itemId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ manager_id: managerId, force, ...(adminNote !== undefined ? { admin_note: adminNote } : {}) }),
   });
 }
 
@@ -438,7 +462,7 @@ export function listLessons(managerId: number): Promise<{ lessons: Lesson[] }> {
   return request(`/learning/lessons?manager_id=${managerId}`);
 }
 
-export function updateLesson(lessonId: number, managerId: number, patch: { text?: string; scope?: string; lang_scope?: string; status?: string }): Promise<Lesson> {
+export function updateLesson(lessonId: number, managerId: number, patch: { text?: string; scope?: string; lang_scope?: string; status?: string; project_ids?: number[]; lang_keys?: string[] }): Promise<Lesson> {
   return request(`/learning/lessons/${lessonId}`, { method: "PUT", body: JSON.stringify({ manager_id: managerId, ...patch }) });
 }
 

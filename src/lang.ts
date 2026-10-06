@@ -19,7 +19,7 @@ export function isRegisterSummaryRow(row: MultiCheckRowResult): boolean {
 // on-screen results) and reportHtml.ts (the downloadable/new-tab report),
 // so the two stay consistent.
 export function realRowCount(rows: MultiCheckRowResult[]): number {
-  return rows.filter(r => !isRegisterSummaryRow(r) && r.findings.some(f => !f.deleted)).length;
+  return rows.filter(r => !isRegisterSummaryRow(r)).length;
 }
 
 // Same idea as realRowCount above, but for a standalone text-pair check's
@@ -28,7 +28,7 @@ export function realRowCount(rows: MultiCheckRowResult[]): number {
 // exactly one register_summary finding and no real ones, and must show
 // "без проблем", not "1 найдено".
 export function realFindingCount(findings: Finding[]): number {
-  return findings.filter(f => f.type !== "register_summary" && !f.deleted).length;
+  return findings.filter(f => f.type !== "register_summary").length;
 }
 
 // The count shown in the "(N)" badge next to a language code on the
@@ -42,7 +42,7 @@ export function realFindingCount(findings: Finding[]): number {
 // exclusion as realRowCount/realFindingCount — that synthetic tone report
 // is informational, not a problem, and must never inflate this count.
 export function findingCountInRows(rows: MultiCheckRowResult[]): number {
-  return rows.reduce((sum, r) => sum + (isRegisterSummaryRow(r) ? 0 : r.findings.filter(f => !f.deleted).length), 0);
+  return rows.reduce((sum, r) => sum + (isRegisterSummaryRow(r) ? 0 : r.findings.length), 0);
 }
 
 // Turns a two-letter region code ("KZ") into its flag emoji by combining the
@@ -201,7 +201,6 @@ export const SEVERITY_LABEL: Record<string, string> = { high: "Важно", medi
 // instead of looking it up here.
 export const TYPE_LABEL: Record<string, string> = {
   system: "⚠ Внимание",
-  manual: "От менеджера",
   sms_charset: "SMS-алфавит",
   // "other" is a genuine finding the AI flagged as a real, serious problem
   // that didn't fit any of the checks actually selected (see

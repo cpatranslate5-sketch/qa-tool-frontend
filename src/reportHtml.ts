@@ -93,11 +93,10 @@ function findingHtml(f: Finding, rv: ReviewInfo | null = null, loc = ""): string
     <div class="finding finding-${esc(f.severity)}${rv ? " rv-item" : ""}"${rv ? ` data-key="${esc(rv.key)}"` : ""}>
       ${rv ? reviewCornerHtml() : ""}
       ${rv ? `<span class="rv-num">№${rv.num}</span>` : ""}
-      ${rv ? `<span class="rv-tools"><button type="button" class="rv-tool rv-edit-btn" title="Изменить комментарий платформы (нужен пароль папки)">✏️</button><button type="button" class="rv-tool rv-del-btn" title="Удалить замечание из отчёта (нужен пароль папки)">🗑</button></span>` : ""}
       <span class="finding-severity">${esc(SEVERITY_LABEL[f.severity] || f.severity)}</span>
       <span class="finding-type">${esc(TYPE_LABEL[f.type] || f.type)}</span>
       ${findingConfidence(f) != null ? `<span class="finding-type" title="Уверенность модели в этой находке">${findingConfidence(f)}%</span>` : ""}
-      <div class="finding-message"${rv ? ` data-raw="${esc(f.message || "")}"` : ""}>${messageInner}${f.edited_by ? ` <span class="rv-edited" title="Изменено: ${esc(f.edited_by)}">(изменено)</span>` : ""}</div>
+      <div class="finding-message">${messageInner}</div>
       ${loc}
       ${rv ? reviewFieldsHtml() + translatorAnswerHtml(rv.tr, rv.entry) : ""}
     </div>
@@ -191,23 +190,6 @@ const REPORT_CSS = `
   .rv-tr-yes { color: #17703c; font-weight: 600; }
   .rv-tr-no { color: #b42318; font-weight: 600; }
   .rv-req { margin-top: 4px; font-size: 0.85rem; color: #3949ab; }
-  .rv-tools { float: right; margin-right: 8px; display: inline-flex; gap: 4px; }
-  .rv-tool { border: 1px solid #e3e5ee; background: #fff; border-radius: 6px; cursor: pointer; padding: 2px 6px; font-size: 0.8rem; opacity: 0.7; }
-  .rv-tool:hover { opacity: 1; }
-  .rv-editbox { margin: 8px 0; padding: 8px; border: 1px dashed #b4b9d6; border-radius: 8px; background: #fafbff; }
-  .rv-editbox textarea { width: 100%; min-height: 60px; font: inherit; }
-  .rv-edit-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-  .rv-edit-row input { padding: 4px 6px; border: 1px solid #ccd; border-radius: 6px; }
-  .rv-edit-row button { padding: 4px 10px; border-radius: 6px; border: 1px solid #ccd; background: #fff; cursor: pointer; }
-  .rv-edit-ok { background: #4f46e5 !important; color: #fff; border-color: #4f46e5 !important; }
-  .rv-edit-err { color: #b42318; font-size: 0.85rem; }
-  .rv-edit-warn { color: #b42318; font-size: 0.9rem; }
-  .rv-edited { color: #888; font-size: 0.8rem; }
-  .rv-add-btn { margin-top: 8px; border: 1px dashed #4f46e5; color: #4f46e5; background: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 0.85rem; }
-  .rv-add-lang { margin: 6px 0 14px; }
-  .rv-addbox select { padding: 4px 6px; border: 1px solid #ccd; border-radius: 6px; }
-  .rv-addbox textarea { margin-bottom: 6px; }
-  .rv-label { display: block; font-size: 0.85rem; color: #555; margin: 4px 0 2px; }
   .finding-loc { margin-top: 6px; font-size: 0.85rem; color: #555; white-space: pre-wrap; }
   mark.loc { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
   .pair div { white-space: pre-wrap; }
@@ -443,140 +425,6 @@ const REVIEW_SCRIPT = `
   });
   document.getElementById("rv-share-copy").addEventListener("click", copyShare);
   document.getElementById("rv-share-revoke").addEventListener("click", revokeShare);
-  // ✏️ / 🗑 — change the platform's comment or remove the finding from the
-  // report; both need the folder's password (2026-10-05).
-  function closeEditBoxes(except) {
-    document.querySelectorAll(".rv-editbox").forEach(function (b) { if (b !== except) b.remove(); });
-  }
-  document.addEventListener("click", function (ev) {
-    var t = ev.target.closest && ev.target.closest(".rv-edit-btn, .rv-del-btn");
-    if (!t) return;
-    var item = t.closest(".rv-item");
-    var key = item.getAttribute("data-key");
-    var isEdit = t.classList.contains("rv-edit-btn");
-    var old = item.querySelector(".rv-editbox");
-    if (old) { old.remove(); return; }
-    closeEditBoxes(null);
-    var box = document.createElement("div");
-    box.className = "rv-editbox";
-    var msgEl = item.querySelector(".finding-message");
-    box.innerHTML = (isEdit ? '<label class="rv-label">Новый комментарий платформы:</label><textarea class="rv-edit-text"></textarea>'
-        : '<div class="rv-edit-warn">Удалить это замечание из отчёта? Оно пропадёт и у переводчика.</div>') +
-      '<div class="rv-edit-row"><input type="password" class="rv-edit-code" placeholder="Пароль папки" autocomplete="current-password">' +
-      '<button type="button" class="rv-edit-ok">' + (isEdit ? "Сохранить" : "Удалить") + '</button>' +
-      '<button type="button" class="rv-edit-cancel">Отмена</button><span class="rv-edit-err"></span></div>';
-    if (isEdit) box.querySelector(".rv-edit-text").value = msgEl ? (msgEl.getAttribute("data-raw") || msgEl.textContent) : "";
-    (msgEl || item).insertAdjacentElement("afterend", box);
-    (isEdit ? box.querySelector(".rv-edit-text") : box.querySelector(".rv-edit-code")).focus();
-    box.querySelector(".rv-edit-cancel").addEventListener("click", function () { box.remove(); });
-    box.querySelector(".rv-edit-ok").addEventListener("click", function () {
-      var ok = this, err = box.querySelector(".rv-edit-err");
-      var code = box.querySelector(".rv-edit-code").value;
-      var message = isEdit ? box.querySelector(".rv-edit-text").value.trim() : null;
-      if (!code) { err.textContent = "Введите пароль папки."; return; }
-      if (isEdit && !message) { err.textContent = "Комментарий не может быть пустым."; return; }
-      ok.disabled = true; err.textContent = "";
-      fetch(apiBase() + "/finding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manager_id: RV_CFG.managerId, code: code, key: key, action: isEdit ? "edit" : "delete", message: message })
-      }).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (body) {
-          if (!r.ok) throw new Error(body.detail || "Не удалось сохранить.");
-          return body;
-        });
-      }).then(function (body) {
-        if (isEdit) {
-          sel(key).forEach(function (w) {
-            var m = w.querySelector(".finding-message");
-            if (m) { m.textContent = body.message; m.setAttribute("data-raw", body.message);
-              var tag = document.createElement("span"); tag.className = "rv-edited"; tag.textContent = " (изменено)"; m.appendChild(tag); }
-          });
-          box.remove();
-        } else {
-          sel(key).forEach(function (w) { w.remove(); });
-          delete RV_ITEMS[key]; delete RV_STATE[key];
-          updateBar();
-        }
-      }).catch(function (e) { ok.disabled = false; err.textContent = e.message; });
-    });
-  });
-  // ➕ The manager's own remark for the translator (2026-10-05): to a row
-  // of the report or to the language as a whole; needs the folder password.
-  function escHtml(v) {
-    return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  document.addEventListener("click", function (ev) {
-    var t = ev.target.closest && ev.target.closest(".rv-add-btn");
-    if (!t) return;
-    var next = t.nextElementSibling;
-    if (next && next.classList.contains("rv-addbox")) { next.remove(); return; }
-    var free = t.classList.contains("rv-add-lang");
-    var box = document.createElement("div");
-    box.className = "rv-editbox rv-addbox";
-    box.innerHTML = (free
-        ? '<label class="rv-label">Источник (необязательно):</label><textarea class="rv-add-src"></textarea>' +
-          '<label class="rv-label">Перевод (необязательно):</label><textarea class="rv-add-trn"></textarea>'
-        : "") +
-      '<label class="rv-label">Ваш комментарий для переводчика:</label><textarea class="rv-add-msg"></textarea>' +
-      '<div class="rv-edit-row"><select class="rv-add-sev"><option value="high">Важно</option><option value="medium" selected>Средне</option><option value="low">Мелочь</option></select>' +
-      '<input type="password" class="rv-edit-code" placeholder="Пароль папки" autocomplete="current-password">' +
-      '<button type="button" class="rv-edit-ok">Добавить</button><button type="button" class="rv-edit-cancel">Отмена</button>' +
-      '<span class="rv-edit-err"></span></div>';
-    t.insertAdjacentElement("afterend", box);
-    (box.querySelector(".rv-add-src") || box.querySelector(".rv-add-msg")).focus();
-    box.querySelector(".rv-edit-cancel").addEventListener("click", function () { box.remove(); });
-    box.querySelector(".rv-edit-ok").addEventListener("click", function () {
-      var ok = this, err = box.querySelector(".rv-edit-err");
-      var msg = box.querySelector(".rv-add-msg").value.trim();
-      var code = box.querySelector(".rv-edit-code").value;
-      if (!msg) { err.textContent = "Напишите комментарий."; return; }
-      if (!code) { err.textContent = "Введите пароль папки."; return; }
-      ok.disabled = true; err.textContent = "";
-      var lang = t.getAttribute("data-lang");
-      var payload = {
-        manager_id: RV_CFG.managerId, code: code, sheet_idx: Number(t.getAttribute("data-sheet")), lang: lang,
-        excel_row: free ? null : Number(t.getAttribute("data-row")), message: msg,
-        severity: box.querySelector(".rv-add-sev").value,
-        source: free ? box.querySelector(".rv-add-src").value : null,
-        translation: free ? box.querySelector(".rv-add-trn").value : null
-      };
-      fetch(apiBase() + "/finding-add", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
-      }).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (body) {
-          if (!r.ok) throw new Error(body.detail || "Не удалось добавить.");
-          return body;
-        });
-      }).then(function (body) {
-        var f = body.finding, sevLabel = { high: "Важно", medium: "Средне", low: "Мелочь" }[f.severity] || f.severity;
-        var item = document.createElement("div");
-        item.className = "finding finding-" + f.severity + " rv-item";
-        item.setAttribute("data-key", body.key);
-        item.innerHTML = RV_CFG.cornerHtml + '<span class="rv-num">новое</span>' +
-          '<span class="finding-severity">' + escHtml(sevLabel) + '</span><span class="finding-type">От менеджера</span>' +
-          '<div class="finding-message">' + escHtml(f.message) + '</div>' + RV_CFG.fieldsHtml;
-        var holder = item;
-        if (free) {
-          holder = document.createElement("div");
-          holder.className = "multi-row";
-          var src = (body.row.source || "").trim(), trn = (body.row.translation || "").trim();
-          holder.innerHTML = '<div class="multi-row-header">Замечание менеджера</div>' +
-            (src || trn ? '<div class="pair"><div><strong>Источник:</strong> ' + escHtml(src) + '</div><div><strong>Перевод:</strong> ' + escHtml(trn) + '</div></div>' : "");
-          holder.appendChild(item);
-          var results = t.parentElement.querySelector(".lang-results");
-          (results || t.parentElement).appendChild(holder);
-        } else {
-          t.insertAdjacentElement("beforebegin", item);
-        }
-        RV_ITEMS[body.key] = { lang: lang, num: 0 };
-        RV_STATE[body.key] = { decision: "accept", links: "", note: "" };
-        paint(body.key);
-        updateBar();
-        box.remove();
-      }).catch(function (e) { ok.disabled = false; err.textContent = e.message; });
-    });
-  });
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest(".save-btn");
     if (!b || b.classList.contains("saved") || b.disabled) return;
@@ -651,8 +499,8 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                 const saved = savedKeys.has(sk);
                 return `<button type="button" class="save-btn${saved ? " saved" : ""}" data-save="${esc(sk)}" data-sheet="${sheetIdx}" data-lang="${esc(lang)}" data-row="${row.excel_row}" title="${saved ? "Уже в «Сохранённом»" : "Сохранить блок в «Сохранённое»"}">${saved ? "✅" : "💾"}</button>`;
               })() : ""}
-              <div class="multi-row-header">${row.excel_row === 0 || row.excel_row >= 100000 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
-              ${row.excel_row === 0 || (row.excel_row >= 100000 && !(row.source || "").trim() && !(row.translation || "").trim()) ? "" : (() => {
+              <div class="multi-row-header">${row.excel_row === 0 ? esc(row.context || "") : `Строка ${row.excel_row} — ${esc(row.context || "без контекста")}`}</div>
+              ${row.excel_row === 0 ? "" : (() => {
                 const pair = `<div class="pair">
                 <div><strong>Источник:</strong> ${markedHtml(row.source || "", rangesFor("source"))}</div>
                 <div><strong>Перевод:</strong> ${markedHtml(row.translation || "", rangesFor("translation"))}</div>
@@ -662,7 +510,6 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                 return longText ? `<details class="full-text"><summary>Показать весь текст</summary>${pair}</details>` : pair;
               })()}
               ${row.findings.map((f, fi) => {
-                if (f.deleted) return "";
                 let rv: ReviewInfo | null = null;
                 if (isReviewable(row.excel_row, f)) {
                   const key = reviewKey(sheetIdx, lang, row.excel_row, fi);
@@ -676,7 +523,6 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
                 const ex = longText ? excerptFor(f, row.source || "", row.translation || "") : null;
                 return findingHtml(f, rv, ex ? excerptHtml(ex) : locHtml(locs[fi], longText));
               }).join("")}
-              ${reviewEnabled && row.excel_row !== 0 ? `<button type="button" class="rv-add-btn" data-sheet="${sheetIdx}" data-lang="${esc(lang)}" data-row="${row.excel_row}">➕ Своё замечание к этой строке</button>` : ""}
             </div>
           `;
       };
@@ -686,15 +532,13 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
         const bt = b.excel_row === 0 && b.findings.some(f => f.type === "register_summary") ? 0 : 1;
         return at - bt;
       });
-      const visible = ordered.filter(r => r.findings.some(f => !f.deleted));
-      const rowsHtml = visible.length === 0
+      const rowsHtml = rows.length === 0
         ? `<div class="muted">Проблем не найдено.</div>`
-        : visible.map(rowHtml).join("");
+        : ordered.map(rowHtml).join("");
       return `
         <div class="lang-block" data-lang="${esc(lang)}">
           <h4 class="lang-block-title ${realCount > 0 ? "has-findings" : ""}">${esc(flagForLang(lang))} ${esc(lang)} — ${realCount > 0 ? `${realCount} найдено` : "без проблем"}</h4>
           <div class="lang-results">${rowsHtml}</div>
-          ${reviewEnabled ? `<button type="button" class="rv-add-btn rv-add-lang" data-sheet="${sheetIdx}" data-lang="${esc(lang)}">➕ Своё замечание по языку ${esc(lang)} (не к строке из отчёта)</button>` : ""}
         </div>
       `;
     }).join("");
@@ -820,8 +664,6 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
       multiCheckId: result.multi_check_id,
       singleLang: allLangs.length === 1 ? allLangs[0] : null,
       shares: result.shares || {},
-      cornerHtml: reviewCornerHtml(),
-      fieldsHtml: reviewFieldsHtml(),
       usesCrowdin: result.uses_crowdin !== false,
       crowdinKnown: typeof result.uses_crowdin === "boolean",
     })};

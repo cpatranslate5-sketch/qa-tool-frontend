@@ -46,6 +46,7 @@ function ReviewCard({
   const [scope, setScope] = useState(scopeFor(item, r?.suggested_scope));
   const [langScope, setLangScope] = useState("lang");
   const [projectIds, setProjectIds] = useState<number[]>([]);
+  const [langKeys, setLangKeys] = useState<string[]>([]);
   const [thinking, setThinking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -183,11 +184,12 @@ function ReviewCard({
         <textarea rows={3} value={text} onChange={e => { setText(e.target.value); setTouched(true); }}
           placeholder={wrong ? "Модель считает замечание верным — урок, скорее всего, не нужен." : "Например: в узбекском hisoblandi значит «начислено», а не «подсчитано» — это не ошибка."} />
         <ScopeChooser item={item} scope={scope} setScope={setScope} langScope={langScope} setLangScope={setLangScope}
-          projectIds={projectIds} setProjectIds={setProjectIds} />
+          projectIds={projectIds} setProjectIds={setProjectIds}
+          langKeys={langKeys} setLangKeys={setLangKeys} presetLangKey={item.lang_key} />
         {error && <div className="error-box">{error}</div>}
         <div className="sg-actions">
-          <button type="button" className={wrong ? "secondary" : ""} disabled={busy || !text.trim() || (scope === "projects" && projectIds.length === 0)}
-            onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope, projectIds))}>
+          <button type="button" className={wrong ? "secondary" : ""} disabled={busy || !text.trim() || (scope === "projects" && projectIds.length === 0) || (langScope === "langs" && langKeys.length === 0)}
+            onClick={() => act(() => learnItem(item.id, manager.id, text, scope, langScope, projectIds, langKeys))}>
             Запомнить
           </button>
           {item.status === "new" && (

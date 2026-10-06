@@ -672,3 +672,21 @@ button:disabled { opacity: 0.5; cursor: default; }
 .finding-excerpt mark { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
 details.full-text { margin-bottom: 6px; font-size: 0.85rem; }
 details.full-text summary { cursor: pointer; color: var(--accent); }
+
+/* «Разбор комментариев» (2026-10-05) */
+.cr-ai { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); }
+.cr-verdict-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cr-verdict { font-size: 0.8rem; font-weight: 700; border-radius: 10px; padding: 2px 10px; }
+.cr-verdict.ok { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.cr-verdict.warn { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.cr-verdict.bad { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.cr-verdict.muted { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted-2); }
+.cr-reason { margin-top: 8px; white-space: pre-wrap; }
+.cr-reply { margin-top: 8px; white-space: pre-wrap; }
+.cr-meta { margin-top: 8px; }
+.cr-toolbar { align-items: center; gap: 10px; margin: 10px 0; }
+.cr-note { margin-top: 4px; }
+.cr-note textarea { width: 100%; }
+.lr-projects { margin: 6px 0 0 22px; padding-left: 10px; border-left: 2px solid var(--border); max-height: 220px; overflow-y: auto; }
+.lr-projects-sep { margin-top: 6px; }
+.lr-langs { columns: 2; column-gap: 16px; }
