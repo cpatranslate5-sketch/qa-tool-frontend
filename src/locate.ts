@@ -15,7 +15,37 @@ export interface FindingLocation {
   after: string;
 }
 
-const QUOTE_RE = /«([^«»]{2,200})»|“([^“”]{2,200})”|"([^"]{2,200})"/g;
+const QUOTE_RE = /«([^«»]{2,200})»|“([^“”]{2,200})”|„([^„“”]{2,200})[“”]|"([^"]{2,200})"/g;
+
+// 2026-10-06 (Александр): exact quotes only used to fail on a curly
+// apostrophe, a non-breaking space or «…» inside the quote — no highlight,
+// no folding. Now texts are compared loosely (spaces, quotes/apostrophes,
+// ё/е, case, &nbsp;) and «…»-split pieces are tried too. Same logic as
+// app/share_page.py.
+const CHAR_FOLD: Record<string, string> = {
+  " ": " ", " ": " ", " ": " ", " ": " ", " ": " ", " ": " ", " ": " ",
+  "’": "'", "‘": "'", "ʼ": "'", "ʻ": "'", "`": "'", "´": "'",
+  "“": '"', "”": '"', "„": '"', "«": '"', "»": '"',
+  "–": "-", "—": "-", "‑": "-",
+  "ё": "е", "Ё": "е",
+};
+
+function fold(text: string): { s: string; starts: number[]; ends: number[] } {
+  let s = "";
+  const starts: number[] = [], ends: number[] = [];
+  let i = 0, prevSpace = false;
+  while (i < text.length) {
+    let ch: string, step: number;
+    if (text.startsWith("&nbsp;", i)) { ch = " "; step = 6; } else { ch = text[i]; step = 1; }
+    let c = (CHAR_FOLD[ch] ?? ch).toLowerCase();
+    if (/\s/.test(c)) c = " ";
+    if (c === " " && prevSpace) { ends[ends.length - 1] = i + step; i += step; continue; }
+    prevSpace = c === " ";
+    s += c; starts.push(i); ends.push(i + step);
+    i += step;
+  }
+  return { s, starts, ends };
+}
 
 export function findingFragments(f: Finding): string[] {
   const out: string[] = [];
@@ -24,17 +54,48 @@ export function findingFragments(f: Finding): string[] {
   let m: RegExpExecArray | null;
   QUOTE_RE.lastIndex = 0;
   while ((m = QUOTE_RE.exec(f.message || ""))) {
-    const q = (m[1] || m[2] || m[3] || "").trim().replace(/^…|…$/g, "").trim();
+    const q = (m[1] || m[2] || m[3] || m[4] || "").trim().replace(/^…+|…+$/g, "").trim();
     if (q.length >= 2 && !out.includes(q)) out.push(q);
+  }
+  for (const q of [...out]) {
+    for (let piece of q.split(/…|\.\.\./)) {
+      piece = piece.replace(/^[\s,;:—–-]+|[\s,;:—–-]+$/g, "");
+      if (piece.length >= 4 && !out.includes(piece)) out.push(piece);
+    }
   }
   return out;
 }
 
-function find(text: string, needle: string): number {
-  if (!needle || !text) return -1;
+function findSpan(text: string, needle: string): [number, number] | null {
+  if (!needle || !text) return null;
   const i = text.indexOf(needle);
-  if (i >= 0) return i;
-  return text.toLowerCase().indexOf(needle.toLowerCase());
+  if (i >= 0) return [i, i + needle.length];
+  const t = fold(text), n = fold(needle).s.trim();
+  if (n.length < 2) return null;
+  const j = t.s.indexOf(n);
+  if (j < 0) return null;
+  return [t.starts[j], t.ends[j + n.length - 1]];
+}
+
+function find(text: string, needle: string): number {
+  const sp = findSpan(text, needle);
+  return sp ? sp[0] : -1;
+}
+
+// Each text searched on its own — the spot is marked in both when quoted
+// from both.
+export function locateFields(f: Finding, source: string, translation: string): { source: [number, number] | null; translation: [number, number] | null } {
+  const out = { source: null as [number, number] | null, translation: null as [number, number] | null };
+  if (f.type === "register_summary" || f.type === "system") return out;
+  const cands = findingFragments(f);
+  for (const field of ["translation", "source"] as const) {
+    const text = field === "translation" ? translation || "" : source || "";
+    for (const c of cands) {
+      const sp = findSpan(text, c);
+      if (sp) { out[field] = sp; break; }
+    }
+  }
+  return out;
 }
 
 export function locateFinding(f: Finding, source: string, translation: string): FindingLocation | null {
@@ -43,9 +104,9 @@ export function locateFinding(f: Finding, source: string, translation: string): 
   for (const field of ["translation", "source"] as const) {
     for (const cand of findingFragments(f)) {
       const text = field === "translation" ? translation || "" : source || "";
-      const start = find(text, cand);
-      if (start < 0) continue;
-      const end = start + cand.length;
+      const sp = findSpan(text, cand);
+      if (!sp) continue;
+      const [start, end] = sp;
       const lines = text.split("\n");
       let pos = 0, paragraph = 0, count = 0;
       for (const line of lines) {
@@ -85,7 +146,7 @@ export function locationLabel(loc: FindingLocation): string {
 // few sentences of it) with the error, in both the source and the
 // translation — same logic as the translator page (app/share_page.py).
 export interface ExcerptPart { text: string; mark: [number, number] | null; para: number; paras: number; cutStart: boolean; cutEnd: boolean }
-export interface Excerpt { source: ExcerptPart; translation: ExcerptPart; field: "source" | "translation"; start: number; end: number }
+export interface Excerpt { source: ExcerptPart; translation: ExcerptPart; field: "source" | "translation"; start: number; end: number; located: boolean }
 
 function paraSpans(text: string): [number, number][] {
   const spans: [number, number][] = [];
@@ -117,29 +178,31 @@ function windowAround(text: string, a: number, b: number, limit = 500): [number,
 export function excerptFor(f: Finding, source: string, translation: string): Excerpt | null {
   source = source || ""; translation = translation || "";
   if (!(isLongText(source) || isLongText(translation))) return null;
-  const loc = locateFinding(f, source, translation);
-  if (!loc) return null;
   const texts = { source, translation };
   const spans = { source: paraSpans(source), translation: paraSpans(translation) };
-  const field = loc.field;
-  const other = field === "translation" ? "source" : "translation";
-  const k = paraIndex(spans[field], loc.start);
-  const nF = spans[field].length, nO = spans[other].length;
-  if (nO === 0) return null;
-  const kO = nF === nO ? k : Math.min(nO - 1, Math.round((k * (nO - 1)) / Math.max(1, nF - 1)));
-  const part = (name: "source" | "translation", idx: number): ExcerptPart => {
+  const found = locateFields(f, source, translation);
+  const main = found.translation ? "translation" : found.source ? "source" : null;
+  const part = (name: "source" | "translation"): ExcerptPart => {
+    if (!spans[name].length) return { text: texts[name], mark: null, para: 1, paras: 1, cutStart: false, cutEnd: false };
+    let idx = 0;
+    const own = found[name];
+    if (own) idx = paraIndex(spans[name], own[0]);
+    else if (main && found[main] && spans[main].length) {
+      const k = paraIndex(spans[main], found[main]![0]);
+      const nM = spans[main].length, nO = spans[name].length;
+      idx = nM === nO ? k : Math.min(nO - 1, Math.round((k * (nO - 1)) / Math.max(1, nM - 1)));
+    }
     const [ps, pe] = spans[name][idx];
     const para = texts[name].slice(ps, pe);
-    let mark: [number, number] | null = null;
-    if (name === field) mark = [loc.start - ps, loc.end - ps];
-    else for (const cand of findingFragments(f)) { const i = find(para, cand); if (i >= 0) { mark = [i, i + cand.length]; break; } }
+    const mark: [number, number] | null = own && ps <= own[0] && own[1] <= pe ? [own[0] - ps, own[1] - ps] : null;
     const [ws, we] = mark ? windowAround(para, mark[0], mark[1]) : windowAround(para, 0, 0);
     return {
       text: para.slice(ws, we), mark: mark ? [mark[0] - ws, mark[1] - ws] : null,
       para: idx + 1, paras: spans[name].length, cutStart: ws > 0, cutEnd: we < para.length,
     };
   };
-  return { source: part("source", field === "source" ? k : kO), translation: part("translation", field === "translation" ? k : kO), field, start: loc.start, end: loc.end };
+  const m = main ? found[main]! : [0, 0];
+  return { source: part("source"), translation: part("translation"), field: main || "translation", start: m[0], end: m[1], located: !!main };
 }
 
 export function excerptLabel(title: string, p: ExcerptPart): string {

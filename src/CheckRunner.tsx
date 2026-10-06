@@ -78,6 +78,7 @@ function FindingRow({ f, source = "", translation = "" }: { f: Finding; source?:
           <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.color ? seg.text : <TagText text={seg.text} />}</span>
         ))}
       </div>
+      {ex && !ex.located && <div className="finding-loc">📍 Точное место не определено автоматически — см. весь текст.</div>}
       {ex && (
         <div className="history-pair finding-excerpt">
           <div><strong>{excerptLabel("Источник", ex.source)}</strong> <ExcerptText p={ex.source} /></div>

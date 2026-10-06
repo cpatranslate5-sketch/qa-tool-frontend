@@ -9,7 +9,7 @@ import { describeCostByModelRu, alsoRowsSegments, TAG_COLOR, tagSegments, descri
 import { toneKey, isReviewable, reviewCornerHtml, reviewFieldsHtml, reviewKey, translatorAnswerHtml } from "./filteredReport";
 import { API_URL, multiCheckDetail, multiCheckReportUrl, singleCheckReport } from "./api";
 import type { Finding, MultiCheckResponse, ReviewEntry, TranslatorEntry } from "./types";
-import { excerptFor, excerptLabel, isLongText, locateFinding, locationLabel, type Excerpt, type ExcerptPart, type FindingLocation } from "./locate";
+import { excerptFor, excerptLabel, isLongText, locateFields, locateFinding, locationLabel, type Excerpt, type ExcerptPart, type FindingLocation } from "./locate";
 
 function esc(s: string): string {
   return String(s ?? "")
@@ -49,7 +49,7 @@ function partHtml(p: ExcerptPart): string {
 // Only the paragraph with the error, source and translation (long texts).
 function excerptHtml(ex: Excerpt | null): string {
   if (!ex) return "";
-  return `<div class="pair excerpt">
+  return `${ex.located ? "" : `<div class="finding-loc">📍 Точное место не определено автоматически — откройте весь текст.</div>`}<div class="pair excerpt">
     <div><strong>${esc(excerptLabel("Источник", ex.source))}</strong> ${partHtml(ex.source)}</div>
     <div><strong>${esc(excerptLabel("Перевод", ex.translation))}</strong> ${partHtml(ex.translation)}</div>
   </div>`;
@@ -489,8 +489,9 @@ export function buildReportHtml(result: MultiCheckResponse, projectId?: number, 
           return `<div class="multi-row rv-general"><div class="multi-row-header">Тон обращения</div>${findingHtml(tone, { key, num: 1, tr: translatorReview[key], entry: (result.review || {})[key] })}</div>`;
         }
         const locs = row.findings.map(f => locateFinding(f, row.source || "", row.translation || ""));
+        const spots = row.findings.map(f => locateFields(f, row.source || "", row.translation || ""));
         const rangesFor = (field: "source" | "translation") =>
-          locs.filter((l): l is FindingLocation => !!l && l.field === field).map(l => ({ start: l.start, end: l.end }));
+          spots.map(sp => sp[field]).filter((x): x is [number, number] => !!x).map(([start, end]) => ({ start, end }));
         const longText = isLongText(row.translation || "") || isLongText(row.source || "");
         return `
             <div class="multi-row">
