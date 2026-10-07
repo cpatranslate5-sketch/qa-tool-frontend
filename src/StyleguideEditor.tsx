@@ -29,6 +29,7 @@ const GROUPS: { title: string; keys: string[] }[] = [
 const AUTO_FLAGS: [string, string][] = [
   ["en_dash_forbidden", "Короткое тире «–» запрещено"],
   ["hyphen_forbidden", "Дефис «-» запрещён"],
+  ["hyphen_as_dash", "Дефис « - » вместо тире между словами — ошибка"],
   ["ellipsis_char", "Только символ «…», не «...»"],
   ["arabic_punct", "Арабские знаки «،» и «؟»"],
   ["danda", "Данда «।» в конце предложения"],

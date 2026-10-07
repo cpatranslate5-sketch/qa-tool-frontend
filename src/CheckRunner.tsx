@@ -78,7 +78,6 @@ function FindingRow({ f, source = "", translation = "" }: { f: Finding; source?:
           <span key={i} style={seg.color ? { color: seg.color, fontWeight: 600 } : undefined}>{seg.color ? seg.text : <TagText text={seg.text} />}</span>
         ))}
       </div>
-      {ex && !ex.located && <div className="finding-loc">📍 Точное место не определено автоматически — см. весь текст.</div>}
       {ex && (
         <div className="history-pair finding-excerpt">
           <div><strong>{excerptLabel("Источник", ex.source)}</strong> <ExcerptText p={ex.source} /></div>
@@ -1231,9 +1230,9 @@ export default function CheckRunner({
                     </h4>
                     <div className="lang-results">
                       {rows.length === 0 && <div className="muted">Проблем не найдено.</div>}
-                      {rows.map((row, i) => (
+                      {rows.filter(r => r.findings.some(f => !f.deleted)).map((row, i) => (
                         <div key={i} className="multi-row">
-                          <div className="multi-row-header">Строка {row.excel_row} — {row.context || "без контекста"}</div>
+                          <div className="multi-row-header">{row.excel_row >= 100000 ? row.context : `Строка ${row.excel_row} — ${row.context || "без контекста"}`}</div>
                           {isLongText(row.source) || isLongText(row.translation) ? (
                             <details className="full-text">
                               <summary>Показать весь текст</summary>
@@ -1248,7 +1247,7 @@ export default function CheckRunner({
                               <div><strong>Перевод:</strong> <TagText text={row.translation} /></div>
                             </div>
                           )}
-                          {row.findings.map((f, fi) => <FindingRow key={fi} f={f} source={row.source} translation={row.translation} />)}
+                          {row.findings.map((f, fi) => f.deleted ? null : <FindingRow key={fi} f={f} source={row.source} translation={row.translation} />)}
                         </div>
                       ))}
                     </div>
